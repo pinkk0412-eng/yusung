@@ -1,0 +1,1025 @@
+/* =====================================================================
+ * 유성 현장 관리 프로그램 — 화면 스타일
+ * 디자인 기준 (화면 전체가 같은 값을 씀 — 새 규칙도 이 값만 쓰기)
+ *   모서리: 큰 상자 var(--r) 8px · 버튼·입력칸 var(--r-sm) 6px · 칩만 완전히 둥글게
+ *   글자: 본문 14 · 표 13 · 보조 12 / 제목: 화면 20 · 상자 16
+ *   그림자는 팝업·메뉴에만, 경계선은 var(--line) 한 가지
+ * ===================================================================== */
+:root{
+  --bg:#f4f6f9; --panel:#fff; --ink:#1b2230; --ink-2:#3d4757; --muted:#6b7586;
+  --line:#e2e6ec; --line-2:#eef1f5; --hover:#f6f8fb;
+  --accent:#2b59c3; --accent-h:#2249a3; --accent-soft:#edf2fd;
+  --warn:#a35400; --warn-soft:#fff6e8; --warn-line:#f3d6a6;
+  --bad:#c03636; --bad-soft:#fdefef; --ok:#177245; --ok-soft:#e9f6ef;
+  --late:#c2255c;   /* 출근부 지각 표시 */
+  --r:8px; --r-sm:6px; --side:200px; --top:56px;
+  --pop:0 12px 32px rgba(16,24,40,.14);
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 "Malgun Gothic","맑은 고딕",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+input,select,button,textarea{font:inherit;color:inherit}
+h1,h2,h3{color:var(--ink);letter-spacing:-.2px}
+h2{font-size:16px;font-weight:700;margin:0 0 12px}
+h3{font-size:14px;font-weight:700;margin:20px 0 8px}
+a{color:var(--accent)}
+.row{display:flex;gap:8px 10px;flex-wrap:wrap;align-items:center}
+.grow{flex:1}
+.muted{color:var(--muted)}
+.bad{color:var(--bad)}   /* 빨간 글자 (오류·누락) — 코드에 #c00 같은 색을 직접 쓰지 말고 이 이름으로 */
+.small{font-size:12px}
+.right{text-align:right}
+.center{text-align:center}
+.hint{font-size:12px;color:var(--muted);margin:8px 2px 14px}
+
+/* ---------- 화면 틀: 위 막대 · 왼쪽 메뉴 · 본문 ---------- */
+.topbar{position:sticky;top:0;z-index:25;display:flex;align-items:center;gap:16px;height:var(--top);padding:0 20px 0 0;background:#fff;border-bottom:1px solid var(--line)}
+.topbar>*{flex-shrink:0}
+.brand{width:var(--side);padding-left:20px;font-weight:700;font-size:15px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.25}
+.brand .ver{display:block;margin:1px 0 0;font-size:11px;font-weight:400;color:var(--muted)}
+.field-inline{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);white-space:nowrap}
+.topbar select,.topbar input{height:32px;background:#fff;color:var(--ink);border:1px solid var(--line);border-radius:var(--r-sm);padding:0 10px}
+.topbar select:focus,.topbar input:focus{outline:0;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.topbar .btn.ghost{color:var(--muted)}
+.save-state{margin-left:auto;font-size:12px;color:var(--muted);flex-shrink:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.secbtn.active{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.tabs{position:fixed;z-index:20;left:0;top:var(--top);bottom:0;width:var(--side);overflow:auto;display:flex;flex-direction:column;gap:6px;padding:14px 12px;background:#fff;border-right:1px solid var(--line)}
+.nav-group{display:flex;flex-direction:column;gap:2px}
+.nav-group[hidden]{display:none!important}
+.nav-group+.nav-group{border-top:1px solid var(--line-2);padding-top:6px}
+.tabs .nav-item{display:flex;align-items:center;width:100%;height:36px;padding:0 12px;border:0;border-radius:var(--r-sm);background:none;color:var(--ink-2);text-align:left;cursor:pointer;white-space:nowrap}
+.tabs .nav-item:hover{background:var(--hover);color:var(--ink)}
+.tabs .nav-item.active{background:var(--accent-soft);color:var(--accent)}
+.nav-copy b{font-size:14px;font-weight:500}
+.tabs .nav-item.active .nav-copy b{font-weight:700}
+.tabs .nav-bottom{margin-top:auto}
+/* 사용설명서 (10b_help.js) */
+.help{max-width:920px}
+.help-toc-l{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.help-sec{scroll-margin-top:calc(var(--top) + 12px);line-height:1.7}
+.help-sec h3{margin:0 0 10px;font-size:15.5px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.help-sec p{margin:0 0 8px}
+.help-sec ul,.help-sec ol{margin:0 0 8px;padding-left:20px}
+.help-sec li{margin:3px 0}
+.help-t th{width:150px;text-align:left;white-space:nowrap;vertical-align:top;background:var(--hover)}
+.help-t td{white-space:normal}
+.help-faq{margin:0}
+.help-faq dt{font-weight:700;margin-top:10px}
+.help-faq dt::before{content:"Q. ";color:var(--accent)}
+.help-faq dd{margin:2px 0 0;color:var(--ink-2)}
+/* 사용설명서 그림 (화면 예시) */
+.help-fig{margin:0 0 14px}
+.help-shot{border:1px solid var(--line);border-radius:var(--r);background:var(--bg);padding:14px;overflow:hidden;pointer-events:none;user-select:none}
+.help-shot-in{zoom:.82}
+.help-shot .phd{margin-bottom:12px;padding-bottom:10px}
+.help-shot .phd-t h2{font-size:17px}
+.help-shot .btn{display:inline-flex;align-items:center}
+.help-shot .tbl-wrap{overflow:hidden;background:#fff}
+.help-shot .stats{align-items:center;margin-bottom:10px}
+.help-shot .subtabs{align-items:center}
+.help-fig figcaption{margin-top:6px;font-size:12.5px;color:var(--ink-2)}
+.help-fig figcaption>b{color:var(--muted);font-weight:600}
+.help-notes{list-style:none;margin:6px 0 0!important;padding:0!important;display:grid;gap:3px}
+.help-notes li{display:flex;gap:6px;align-items:flex-start;margin:0}
+.help-n{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;width:18px;height:18px;margin:0 3px;border-radius:50%;background:#e03131;color:#fff;font-size:11px;font-weight:700;line-height:1;vertical-align:middle}
+.hm-app{border:1px solid var(--line);border-radius:6px;background:#fff;overflow:hidden}
+.hm-top{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line)}
+.hm-brand{width:150px;font-size:13px}
+.hm-box{border:1px solid var(--line);border-radius:6px;padding:3px 9px;font-size:12px;white-space:nowrap}
+.hm-body{display:flex}
+.hm-side{width:150px;flex:0 0 auto;display:flex;flex-direction:column;gap:1px;padding:8px;border-right:1px solid var(--line)}
+.hm-side span:not(.help-n){padding:4px 9px;border-radius:6px;font-size:12.5px;color:var(--ink-2)}
+.hm-side span.on{background:var(--accent-soft);color:var(--accent);font-weight:700}
+.hm-side i{border-top:1px solid var(--line-2);margin:3px 0}
+.hm-side em{flex:1;min-height:10px}
+.hm-main{flex:1;min-width:0;padding:14px 16px;background:var(--bg)}
+.hm-ph{border:1px dashed #c5ccd8;border-radius:6px;padding:26px;text-align:center;color:var(--muted);background:#fff}
+.hm-qb{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.hm-cal .cal-d{min-height:58px;cursor:default}
+.hm-att{border-collapse:collapse;background:#fff;font-size:12.5px}
+.hm-att th,.hm-att td{border:1px solid var(--line);padding:4px 9px;text-align:center;min-width:34px;white-space:nowrap}
+.hm-att th{background:#f8f9fb;color:var(--muted)}
+.hm-att .we{background:#fafbfc}
+.hm-att td.on{background:#e9f6ef;color:var(--ok);font-weight:700}
+.hm-att td.off{color:var(--muted)}
+.hm-att td.late{background:#ffe3ec;color:#c2255c;font-weight:700}
+.hm-att td.etc{background:var(--warn-soft);color:var(--warn)}
+.hm-auto{color:#8a93a3!important;background:#f6f7f9}
+.hm-fix{color:var(--accent)!important;font-weight:700}
+.hm-flow{display:flex;align-items:stretch;gap:8px;flex-wrap:wrap}
+.hm-step{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:9px 14px;display:flex;flex-direction:column;gap:1px}
+.hm-step small{color:var(--muted)}
+.hm-arr{align-self:center;color:var(--muted);font-weight:700}
+.hm-link{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:stretch}
+.hm-col{display:grid;grid-template-rows:repeat(4,1fr);gap:8px}
+.hm-node{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:9px 12px;font-weight:700;display:flex;flex-direction:column;justify-content:center}
+.hm-node small{font-weight:400;color:var(--muted)}
+.hm-big{grid-row:span 2;border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.hm-mid span{display:flex;align-items:center;font-size:12px;color:var(--muted);white-space:nowrap}
+.hm-two{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:10px}
+@media print{
+  .help-fig{break-inside:avoid}
+  .help-shot,.help-n,.hm-auto,.hm-att td{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body.help-print #view{display:block!important;margin:0;padding:0}
+  body.help-print #printArea,body.help-print .help-toc,body.help-print .phd-a,body.help-print .help-sec h3 .btn{display:none!important}
+  body.help-print .help{max-width:none}
+  body.help-print .help-sec{border:0;padding:0 0 8px}
+  body.help-print .help-sec h3{break-after:avoid}
+}
+main{margin-left:var(--side);padding:24px 28px 64px}
+.data-gate #tabs{display:none!important}
+.data-gate main{max-width:1080px;margin:0 auto}
+
+/* ---------- 화면 머리 ---------- */
+.phd{display:flex;align-items:flex-end;justify-content:space-between;gap:12px 20px;flex-wrap:wrap;margin:0 0 18px;padding-bottom:16px;border-bottom:1px solid var(--line)}
+.phd-t{min-width:260px;flex:1}
+.phd-t h2{margin:0;font-size:20px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.phd-t h2 .badge{font-size:11px}
+.phd-sub{color:var(--muted);font-size:12px;margin-top:4px}
+.phd-guide{color:var(--muted);font-size:12px;margin-top:2px}
+.phd-guide::before{content:"→ ";color:#a9b2c0}
+.phd-a{display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end}
+
+/* ---------- 상자 ---------- */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px 20px;margin-bottom:16px}
+.panel>h2:first-child,.panel>h3:first-child{margin-top:0}
+.two-col{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px}
+.two-col.wide{grid-template-columns:minmax(0,1fr) 370px}
+@media (max-width:1100px){.two-col,.two-col.wide{grid-template-columns:1fr}}
+/* 설정 › 직원·카드: 법인카드 표가 잘리지 않게 오른쪽 칸을 넓게 · 화면이 좁으면 위(법인카드)·아래(직원)로 */
+.two-col.set-staff{grid-template-columns:minmax(0,1fr) 480px}
+@media (max-width:1600px){.two-col.set-staff{grid-template-columns:1fr}.two-col.set-staff>.panel:last-child{order:-1}}
+
+/* ---------- 버튼 · 칩 · 배지 ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:4px;min-height:32px;padding:0 12px;border:1px solid var(--line);background:#fff;border-radius:var(--r-sm);font-size:13px;font-weight:500;color:var(--ink-2);cursor:pointer;white-space:nowrap;text-decoration:none}
+.btn:hover{background:var(--hover);border-color:#cfd6df;color:var(--ink)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.btn.primary:hover{background:var(--accent-h);border-color:var(--accent-h)}
+.btn.danger{color:var(--bad)}
+.btn.edit{background:var(--accent-soft);border-color:#b9cbf3;color:var(--accent);font-weight:600}
+.btn.edit:hover{background:#dfe8fb;border-color:var(--accent);color:var(--accent)}
+.btn.del{background:var(--bad-soft);border-color:#efc2c2;color:var(--bad);font-weight:600}
+.btn.del:hover{background:#fbe1e1;border-color:var(--bad);color:var(--bad)}
+.ph-acts{display:flex;gap:4px;justify-content:center;margin-top:5px}
+tr.ocr-off td{opacity:.4}
+tr.ocr-off td:first-child{opacity:1}
+.btn.ghost{background:transparent;border-color:transparent}
+.btn.ghost:hover{background:#eef1f5}
+.btn.sm{min-height:26px;padding:0 9px;font-size:12px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.lockbtn{opacity:.55;border-style:dashed}
+.btn:focus-visible,.chip:focus-visible,.ib:focus-visible,.tabs .nav-item:focus-visible,.subtabs button:focus-visible,.seg-b:focus-visible,.setup-step:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:2px 10px;font-size:12px;color:var(--ink-2);cursor:pointer}
+.chip:hover{background:var(--accent-soft);border-color:#c9d6f3;color:var(--accent)}
+.chip.tpl{background:#f3f5f8}
+.badge{display:inline-block;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:600;background:#eef1f5;color:var(--ink-2);vertical-align:1px}
+.badge.ok{background:var(--ok-soft);color:var(--ok)}
+.badge.warn{background:var(--warn-soft);color:var(--warn)}
+.badge.bad{background:var(--bad-soft);color:var(--bad)}
+
+/* ---------- 숫자 상자 ---------- */
+.stats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.stat{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:12px 16px;min-width:150px}
+.stat .k{font-size:12px;color:var(--muted)}
+.stat .v{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+.stat.warn{background:var(--warn-soft);border-color:var(--warn-line)}
+.stat.warn .v{color:var(--warn)}
+
+/* ---------- 표 ---------- */
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:#fff}
+table.t{border-collapse:collapse;width:100%;font-size:13px}
+table.t th,table.t td{border-bottom:1px solid var(--line-2);padding:7px 10px;vertical-align:middle;line-height:1.4}
+table.t th{background:#f8f9fb;color:var(--muted);font-size:12px;font-weight:600;text-align:center;position:sticky;top:0;z-index:1;white-space:nowrap;border-bottom-color:var(--line)}
+/* 머리줄 틀 고정: 화면(또는 표 상자)을 내려도 위 막대 바로 아래에 붙음 — --sh 는 04 stickyHeads 가 표마다 넣음 */
+table.t thead th{top:var(--sh,0px);box-shadow:inset 0 -1px 0 var(--line)}
+table.t tbody tr:hover td{background-color:#fafbfd}
+table.t tbody tr:last-child td{border-bottom:0}
+table.t td.num,table.t th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+table.t tr.sum td{background:#f8f9fb;font-weight:700;border-top:1px solid var(--line)}
+table.t tr.sub td{background:#fbfcfd;font-weight:600}
+table.t tr.unset td{background:var(--warn-soft)}
+/* 법인카드: 영수증 없는 줄 — 왼쪽 빨간 띠만 */
+table.t tr.norc td:first-child{box-shadow:inset 4px 0 0 var(--bad)}
+table.t tr.pl-sum td{background:#f0f4fc;font-weight:700}
+/* 현장 손익: 위쪽 월 줄 + 왼쪽 두 칸(구분·항목) 틀 고정. 표 안에서 위아래·옆으로 넘김 (화면 높이에 맞춤) */
+.tbl-wrap.pl-wrap{overflow:auto;max-height:calc(100vh - var(--top) - 60px)}
+/* 출근부: 날짜·요일 두 줄 틀 고정 (인원이 많아도 표 안에서 위아래로 넘김) */
+.tbl-wrap.att-wrap{overflow:auto;max-height:calc(100vh - var(--top) - 60px)}
+table.t.att-tbl thead{position:sticky;top:var(--sh,0px);z-index:2}
+table.t.att-tbl thead th{position:static}
+table.t.pl-tbl th:first-child{position:sticky;left:0;z-index:3}
+table.t.pl-tbl td:nth-child(-n+2){position:sticky;z-index:2;background:#fff;box-sizing:border-box}
+table.t.pl-tbl td:nth-child(1){left:0;width:56px;min-width:56px;max-width:56px}
+table.t.pl-tbl td:nth-child(2){left:56px;box-shadow:inset -1px 0 0 var(--line)}
+table.t.pl-tbl th:first-child{box-shadow:inset -1px 0 0 var(--line)}
+table.t.pl-tbl tr.pl-sum td:nth-child(-n+2){background:#f0f4fc}
+table.t.pl-tbl tr.sub td:nth-child(-n+2){background:#fbfcfd}
+table.t td.neg{color:var(--bad)}
+table.t td.lbl{white-space:nowrap}
+table.t.tight th,table.t.tight td{padding:6px 5px}   /* 칸이 많은 입력 표(법인카드 내역): 한 화면에 들어오게 */
+table.t td.lbl a{color:inherit}
+table.t.fixed{table-layout:fixed;width:100%}
+.nowrap td,.nowrap th{white-space:nowrap}
+table.t input,table.t select,table.t textarea.memo2{width:100%;min-height:28px;border:1px solid transparent;background:transparent;padding:3px 6px;border-radius:4px;box-shadow:inset 0 -1px 0 var(--line)}
+table.t textarea.memo2{display:block;box-sizing:border-box;resize:none;field-sizing:content;line-height:1.4}   /* 사용내역이 길면 두 줄로 */
+table.t input[type=checkbox]{width:auto;min-height:0;box-shadow:none}
+table.t select{box-shadow:none}
+table.t input:hover,table.t select:hover,table.t textarea.memo2:hover{border-color:var(--line);background:#fff}
+table.t input:focus,table.t select:focus,table.t textarea.memo2:focus{border-color:var(--accent);background:#fff;outline:0;box-shadow:0 0 0 3px var(--accent-soft)}
+table.t input.num{text-align:right}
+table.t input.ovr{color:var(--accent);font-weight:700}
+table.t input::placeholder{color:#9aa3b1}
+table.t select[data-f=kind]{min-width:62px}
+table.t [data-ch=tx][data-f=card]{min-width:78px}
+table.t [data-ch=tx][data-f=merchant]{min-width:150px}
+table.t [data-ch=tx][data-f=amount]{min-width:96px}
+table.t [data-ch=tx][data-f=cat]{min-width:104px}
+table.t [data-ch=tx][data-f=memo]{min-width:220px}
+table.t [data-ch=tx][data-f=date]{min-width:128px}
+/* 표 밖의 단독 선택칸·검색칸 (걸러 보기 등) */
+.row>select,.row>input:not([type=checkbox]):not([type=radio]):not([type=file]),.row>label>select,.toolbar select{min-height:32px;border:1px solid var(--line)!important;border-radius:var(--r-sm)!important;padding:0 10px!important;background:#fff;color:var(--ink)}
+/* 칸에 든 글자가 잘리지 않게 입력칸 최소 너비 (표 안 입력칸은 width:100% 라 정하지 않으면 칸이 글자보다 좁아짐) */
+table.t [data-ch=vendor][data-f=subject]{min-width:96px}
+table.t [data-ch=vendor][data-f=name]{min-width:108px}
+table.t [data-ch=vendor][data-f=desc]{min-width:150px}
+table.t [data-ch=vendor][data-f=ref]{min-width:76px}
+table.t [data-ch=mrow][data-f=ys],table.t [data-ch=mrow][data-f=sh]{min-width:92px}
+table.t [data-ch=mrow][data-f=period]{min-width:138px}
+table.t select[data-ch=mck]{min-width:98px}
+table.t [data-ch=staff][data-f=team]{min-width:88px}
+table.t [data-ch=staff][data-f=name],table.t [data-ch=staff][data-f=title]{min-width:72px}
+table.t select[data-ch=staff][data-f=kind]{min-width:156px}
+table.t [data-ch=cardm][data-f=last4]{min-width:56px}
+table.t [data-ch=cardm][data-f=issuer]{min-width:64px}
+table.t [data-ch=cardm][data-f=holder]{min-width:96px}
+table.t select[data-ch=teamPay]{min-width:92px}
+/* 인건비 표: 칸이 많아 가로로 넘칠 때도 구분·성명(왼쪽)과 실지급액(오른쪽)은 늘 보이게 고정 */
+table.t.pay-tbl th{white-space:normal;word-break:keep-all;line-height:1.25}
+table.t.pay-tbl .pay-c1,table.t.pay-tbl .pay-c2,table.t.pay-tbl .pay-net{position:sticky;background:#fff;z-index:2}
+table.t.pay-tbl thead .pay-c1,table.t.pay-tbl thead .pay-c2,table.t.pay-tbl thead .pay-net{z-index:4;background:#f8f9fb}   /* 머리줄이 내려온 줄 위에 */
+table.t.pay-tbl .pay-c1{left:0;width:78px;min-width:78px;max-width:78px;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis}
+table.t.pay-tbl .pay-c2{left:78px;box-shadow:inset -1px 0 0 var(--line)}
+table.t.pay-tbl .pay-net{right:0;box-shadow:inset 1px 0 0 var(--line)}
+table.t.pay-tbl th.pay-c1,table.t.pay-tbl th.pay-c2,table.t.pay-tbl th.pay-net{background:#f8f9fb;z-index:3}
+table.t.pay-tbl tr.sum .pay-net{background:#f8f9fb}
+table.t.pay-tbl tbody tr:hover .pay-c1,table.t.pay-tbl tbody tr:hover .pay-c2,table.t.pay-tbl tbody tr:hover .pay-net{background:#fafbfd}
+table.t select[data-ch=pay][data-f=payType]{min-width:72px}
+table.t select[data-ch=pay][data-f=taxType]{min-width:118px}
+table.t select[data-ch=pay][data-f=payer]{min-width:72px}
+table.t select[data-ch=pay][data-f=plGroup]{min-width:170px}
+/* 출근부 칸 */
+table.grid td{padding:0;text-align:center;min-width:26px}
+table.grid th{padding:5px 1px}   /* 31일 + 계·지각까지 한 화면(1400px)에 들어오게 */
+table.grid td.cell{cursor:pointer;user-select:none;height:30px;font-size:12px}
+table.grid td.cell:hover{box-shadow:inset 0 0 0 1px var(--accent)}
+table.grid td.cell.on{background:var(--ok-soft);color:var(--ok);font-weight:700}
+table.grid td.cell.off{background:#f3f5f8;color:var(--muted)}
+table.grid td.cell.etc{background:var(--accent-soft);color:var(--accent)}
+table.grid th.we,table.grid td.we{background-color:#fdf5f5}
+table.grid td.name{text-align:left;padding:0 8px;white-space:nowrap}
+
+/* ---------- 입력 양식 ---------- */
+.form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px 16px}
+.form-grid label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+.form-grid input,.form-grid select,.form-grid textarea,.rc-form input:not([type=checkbox]),.rc-form select{min-height:34px;border:1px solid var(--line);border-radius:var(--r-sm);padding:6px 10px;font-size:14px;color:var(--ink);background:#fff}
+.form-grid input:focus,.form-grid select:focus,.form-grid textarea:focus,.rc-form input:focus,.rc-form select:focus,.row input:focus,.row select:focus,.modal textarea:focus{outline:0;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+input.needbox{border-color:var(--warn)!important;background:var(--warn-soft)}
+
+/* ---------- 안내 띠 ---------- */
+.banner{border:1px solid transparent;border-radius:var(--r);padding:10px 14px;margin-bottom:14px}
+.banner.warn{background:var(--warn-soft);border-color:var(--warn-line);color:var(--warn)}
+.banner.info{background:var(--accent-soft);border-color:#d3def7;color:#1f468f}
+.banner.ok{background:var(--ok-soft);border-color:#c6e7d4;color:var(--ok)}
+
+/* ---------- 홈 일정 ---------- */
+.task{display:flex;align-items:center;gap:14px;padding:12px 2px;border-bottom:1px solid var(--line-2)}
+.task:last-child{border-bottom:0}
+.dday{min-width:64px;text-align:center;font-weight:700;border-radius:var(--r-sm);padding:4px 6px;font-size:12px;font-variant-numeric:tabular-nums}
+.dday.soon{background:var(--warn-soft);color:var(--warn)}
+.dday.over{background:var(--bad-soft);color:var(--bad)}
+.dday.later{background:#f1f3f6;color:var(--muted)}
+.dday.done{background:var(--ok-soft);color:var(--ok)}
+.tgroup+.tgroup{margin-top:18px}
+/* 업무 홈 달력 */
+.cal-wrap{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px;align-items:start}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border-top:1px solid var(--line);border-left:1px solid var(--line)}
+.cal-w{font-size:12px;font-weight:700;text-align:center;padding:6px 0;background:#f8f9fb;border-right:1px solid var(--line);border-bottom:1px solid var(--line);color:var(--muted)}
+.cal-w.sun,.cal-d.sun .cal-n{color:var(--bad)}
+.cal-w.sat,.cal-d.sat .cal-n{color:#2f6fd6}
+.cal-d{min-height:92px;padding:4px 5px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);cursor:pointer;display:flex;flex-direction:column;gap:3px;min-width:0;background:#fff}
+.cal-d:hover{background:#f7f9fc}
+.cal-d.cal-blank{background:#fafbfc;cursor:default}
+.cal-d.today .cal-n{background:var(--accent);color:#fff!important;border-radius:999px;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center}
+.cal-d.sel{box-shadow:inset 0 0 0 2px var(--accent);background:#f3f7ff}
+.cal-n{font-size:13px;font-weight:700;line-height:24px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-hol{font-size:11px;font-weight:600;color:var(--bad)}
+.cal-ev{display:inline-block;font-size:11px;line-height:1.35;padding:1px 6px;border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;font-weight:600}
+.cal-d .cal-ev{display:block}
+.cal-ev.done{background:var(--ok-soft);color:var(--ok)}
+.cal-ev.soon{background:var(--warn-soft);color:var(--warn)}
+.cal-ev.over{background:var(--bad-soft);color:var(--bad)}
+.cal-ev.later{background:#eef1f5;color:#4a5568}
+.cal-side{border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;background:#fff;min-width:0}
+.cal-side-h{font-size:15px;margin-bottom:6px}
+.cal-side .task{flex-wrap:wrap;gap:8px}
+.cal-side .task .grow{flex-basis:100%;order:-1}
+.cal-up{display:flex;align-items:center;gap:6px;width:100%;text-align:left;background:none;border:0;padding:6px 2px;cursor:pointer;font:inherit;font-size:13px;border-bottom:1px solid var(--line-2)}
+.cal-up:hover{background:#f7f9fc}
+@media (max-width:1100px){.cal-wrap{grid-template-columns:1fr}}
+@media (max-width:700px){.cal-d{min-height:64px;padding:2px}.cal-d .cal-ev{font-size:9.5px;padding:0 3px}}
+.tg-h{font-size:12px;font-weight:700;color:var(--muted);padding:0 2px 6px;border-bottom:1px solid var(--line)}
+
+/* ---------- 작은 탭 (화면 안) ---------- */
+.subtabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.subtabs button{border:1px solid var(--line);background:#fff;border-radius:var(--r-sm);padding:5px 12px;font-size:13px;color:var(--ink-2);cursor:pointer}
+.subtabs button:hover{background:var(--hover)}
+.subtabs button.active{background:var(--ink);border-color:var(--ink);color:#fff}
+.setnav{margin-bottom:16px}
+
+/* ---------- 팝업 · 알림 ---------- */
+.modal-bg{position:fixed;inset:0;background:rgba(16,24,40,.42);display:flex;align-items:flex-start;justify-content:center;z-index:50;overflow:auto;padding:48px 16px}
+.modal{background:#fff;border-radius:12px;max-width:960px;width:100%;padding:22px 24px;box-shadow:var(--pop)}
+/* 창 크기 4가지 (04 modal 의 size): s = 확인·짧은 입력, m = 입력칸 몇 개, 기본 960px = 표·긴 내용, xl = 편집기·사진 */
+.modal.sz-s{max-width:560px}
+.modal.sz-m{max-width:720px}
+.modal.sz-xl{max-width:1150px}
+/* 표·form-grid 밖에 혼자 있는 입력칸(검색 · 한 줄 추가 · 창 안 입력)의 공통 모양 — 줄마다 style 로 테두리를 다시 쓰지 말고 class="inp" */
+.inp{min-height:32px;border:1px solid var(--line);border-radius:var(--r-sm);padding:5px 9px;font:inherit;font-size:13px;color:var(--ink);background:#fff;box-sizing:border-box}
+textarea.inp{width:100%;padding:8px}
+.inp:focus{outline:0;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.modal h3{margin-top:0;font-size:16px}
+.modal .actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--line-2)}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:var(--r);z-index:60;font-size:13px;box-shadow:var(--pop)}
+
+/* ---------- 인쇄 양식 ---------- */
+#printArea{display:none}
+@media print{
+  @page{size:A4;margin:14mm 12mm}
+  body{background:#fff}
+  .no-print,#modalRoot,.toast{display:none!important}
+  #printArea{display:block}
+  .doc+.doc{break-before:page}   /* 앞 양식 다음에만 새 쪽 (맨 끝에 쪽 넘김이 남지 않게) */
+}
+@page a4p{size:A4;margin:14mm 12mm}   /* 이름 없는 양식용 기본 쪽 (13 printPageName) */
+.doc{font-family:"Malgun Gothic","맑은 고딕",sans-serif;color:#000;font-size:12.5px;width:100%}
+.doc h1{text-align:center;font-size:24px;letter-spacing:12px;margin:6px 0 16px}
+.doc table{border-collapse:collapse;width:100%}
+.doc td,.doc th{border:1px solid #000;padding:5px 7px}
+.doc th{background:#eee;font-weight:600}
+.doc .num{text-align:right;font-variant-numeric:tabular-nums}
+.doc .center{text-align:center}
+.doc .head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:12px}
+.doc .big{font-size:15px;font-weight:700}
+.doc .gap{height:12px}
+table.t.fixed{table-layout:fixed;width:100%}
+
+/* 행 끝 버튼(삭제·순서)은 마우스를 올린 줄에서만 진하게 */
+table.t tbody tr td:last-child .btn.ghost{opacity:.28}
+table.t tbody tr:hover td:last-child .btn.ghost,table.t tbody tr td:last-child .btn.ghost:focus{opacity:1}
+
+/* 영수증 붙여넣기 대상 줄 */
+table.t tbody tr.sel td,table.t tbody tr[data-txid]:focus-within td{background:#eaf2ff}
+
+/* 영수증 보기 + 내역 작성 */
+.rc-edit{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(260px,1fr);gap:16px;align-items:start}
+.rc-img{max-height:72vh;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px;background:#fafbfc}
+.rc-form{display:flex;flex-direction:column;gap:8px}
+.rc-form label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
+.rc-form label.small{flex-direction:row;align-items:center;gap:6px;color:inherit}
+.rc-form input:not([type=checkbox]),.rc-form select{border:1px solid var(--line);border-radius:5px;padding:6px 8px;font-size:14px;color:var(--ink)}
+.rc-form input.num{text-align:right}
+@media (max-width:800px){.rc-edit{grid-template-columns:1fr}}
+
+/* 영수증 정산 증빙철 (A4 가로, 3장씩) */
+@page rcland{size:A4 landscape;margin:8mm}
+.doc.rcpage{page:rcland;height:190mm;width:276mm;max-width:100%;overflow:hidden;display:flex;flex-direction:column;border:1.5px solid #000;box-sizing:border-box;padding:0}
+.rchead{width:100%;border-collapse:collapse;table-layout:fixed}
+.doc .rchead td{border:0;border-bottom:1.5px solid #000;padding:6px 10px;vertical-align:middle}
+.doc .rchead td+td{border-left:1.5px solid #000}
+.rcsite{width:20%;text-align:center;font-size:18px;font-weight:700}
+.rctitle{text-align:center}
+.rctitle .t1{font-size:24px;font-weight:800;letter-spacing:2px;text-decoration:underline;text-underline-offset:4px}
+.rctitle .t2{font-size:15px;margin-top:2px}
+.rccat{width:20%;font-size:15px}
+.rccat .sub{text-align:right;margin-top:4px}
+.rcslots{flex:1;display:grid;grid-template-columns:repeat(3,1fr);min-height:0}
+.rcslot{display:flex;flex-direction:column;padding:6mm 5mm 4mm;min-height:0;overflow:hidden}
+.rcslot+.rcslot{border-left:1px dashed #bbb}
+.rcimg{flex:0 1 auto;min-height:0;display:flex;align-items:flex-start;justify-content:center;max-height:148mm}
+.rcimg img{max-width:100%;max-height:148mm;object-fit:contain}
+.doc.rcpage .rcmemo{font-size:9.6pt;line-height:1.35;margin-top:3mm;min-height:0;word-break:normal}
+.rcslot.empty .rcimg-empty{flex:1 1 auto;max-height:none;min-height:110mm}
+.rcslot.empty .rcmemo{margin-top:2mm}
+.rcbands{flex:1;display:flex;flex-direction:column;gap:3mm;padding:4mm 5mm;min-height:0;overflow:hidden}
+.rcband{display:flex;flex-direction:column;align-items:flex-start}
+.rcband img{max-width:100%;object-fit:contain;display:block}
+.rcband .rcmemo{margin-top:2mm;min-height:0}
+
+/* 법인카드 월별 사용집계표 (샘플 양식) */
+.doc.cs,.doc.cd{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.cs-title{text-align:center;font-size:24px!important;letter-spacing:1px!important;margin:4px 0 14px!important;font-weight:800}
+.cs-apprwrap{display:flex;justify-content:flex-end;margin:0 0 10px}
+.doc table.cs-appr{width:auto;border-collapse:collapse;border:1.5px solid #000}
+.doc .cs-appr th,.doc .cs-appr td{border:1px solid #000;width:90px;text-align:center;padding:3px 4px;font-size:12px;background:#fff}
+.doc .cs-appr th{font-weight:700}
+.doc .cs-appr .nm{font-weight:700;height:18px}
+.doc .cs-appr .sg{height:84px}
+.doc .cs-appr .sg2{height:84px;border-top:0}
+.doc .cs-appr .x{background:linear-gradient(to top right,transparent calc(50% - .7px),#000 calc(50% - .7px),#000 calc(50% + .7px),transparent calc(50% + .7px))!important}
+.doc .cs-appr .x2{border-top:0}
+.doc .cs-appr .mgr{font-weight:700}
+.doc .cs-appr .mgrn{text-align:center;font-weight:700;height:34px;white-space:nowrap}
+.doc .cs-appr .mgrn .mgr-nm{margin:0 14px 0 18px}
+.doc .cs-appr .mgrn .pf-sign{font-weight:400;color:#555}
+.doc table.cs-tbl{border-collapse:collapse;width:100%;border:2px solid #444;table-layout:fixed}
+.doc .cs-tbl td,.doc .cs-tbl th{border:1px solid #666;height:36px;padding:4px 10px;font-size:14px;background:#fff}
+.doc .cs-tbl .g,.doc .cs-tbl .c{text-align:center}
+.doc .cs-tbl .num{text-align:right;padding-right:14px}
+.doc .cs-h th,.doc .cs-h td{background:#f8d9a8!important;font-weight:800;font-size:16px;text-align:center}
+.doc .cs-h .per{font-weight:400;font-size:13px}
+.doc .cs-h .cardno{font-size:16px}
+.doc .cs-sub td{background:#eef5a8!important}
+.doc .cs-sub td:last-child{background:#fff!important}
+.doc .cs-tot td{background:#bfbfbf!important;font-size:16px}
+.doc .cs-tot td:last-child{background:#bfbfbf!important}
+@page cdland{size:A4 landscape;margin:10mm}
+.doc.cd{page:cdland}
+
+/* ===== 전도금 청구서 (회사 양식, A4 세로) — 엑셀 행 높이 × 인쇄 배율 78% ===== */
+.doc.cc,.doc.cl{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.doc table.cc-tbl{table-layout:fixed;border:1.5px solid #000}
+.doc .cc-tbl td{border:1px solid #000;padding:0 4px;font-size:11px;font-weight:700;text-align:center;background:#fff;white-space:nowrap;overflow:hidden}
+.doc .cc-tbl td.l{text-align:left}
+.doc .cc-tbl td.n{text-align:right;padding-right:8px;font-variant-numeric:tabular-nums}
+.doc .cc-tbl tr.r1 td{height:11mm}
+.doc .cc-tbl tr.r2 td{height:4.9mm;font-size:10px}
+.doc .cc-tbl tr.r45 td{height:8.3mm}
+.doc .cc-tbl tr.r9 td{height:8.4mm}
+.doc .cc-tbl td.cc-title{position:relative;font-size:22px;letter-spacing:8px;font-weight:700;border-bottom:1px solid #000}
+.cc-logo{position:absolute;left:1mm;top:50%;transform:translateY(-50%);height:8mm;width:auto}
+.doc .cc-tbl td.cc-g{font-size:10px;line-height:1.1}
+.doc .cc-tbl td.cc-wk{background:#ff0!important}
+.doc .cc-tbl td.x{background:linear-gradient(to top right,transparent calc(50% - .5px),#000 calc(50% - .5px),#000 calc(50% + .5px),transparent calc(50% + .5px))!important}
+.doc .cc-tbl .sign-img{height:6mm}
+.doc .cc-tbl .pf-sign{color:#000}
+
+/* ===== 전도금 집행내역 (회사 양식, A4 가로) ===== */
+.doc.cl{page:cdland}
+.doc .cl-title{text-align:left;font-size:20px;letter-spacing:1px;margin:0 0 3mm;font-weight:700}
+.doc table.cl-tbl{table-layout:fixed}
+.doc .cl-tbl th,.doc .cl-tbl td{border:1px solid #000;padding:1px 4px;font-size:12px;height:6.3mm}
+.doc .cl-tbl th{background:#d9d9d9!important;font-weight:700;text-align:center}
+.doc .cl-tbl td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.doc .cl-tbl .c{text-align:center}
+.doc .cl-tbl .n{text-align:right;font-variant-numeric:tabular-nums}
+.doc .cl-tbl .red{color:#e00}
+.doc .cl-tbl tr.cl-sum td{background:#ff0!important}
+.doc table.cd-tbl{border-collapse:collapse;width:100%;table-layout:fixed;border:1.5px solid #555}
+.doc .cd-tbl td,.doc .cd-tbl th{border:1px solid #888;padding:4px 6px;font-size:11.5px;height:22px;background:#fff}
+.doc .cd-tbl .c{text-align:center}
+.doc .cd-tbl .cs-h th{font-size:12px;background:#d9d9d9!important;font-weight:700}
+.doc .cd-tbl .cs-foot td{background:#f3dfb4!important}
+.doc .cd-tbl thead{display:table-header-group}
+.doc .cd-tbl tr{break-inside:avoid}
+
+
+/* ===== 기안품의서: 회사 양식 ===== */
+@page pfpage{size:A4;margin:9mm 8mm}
+.doc.pf{page:pfpage;font-family:"Malgun Gothic","맑은 고딕",sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;color:#000}
+.pf-frame{border:1.6px solid #000;min-height:274mm;box-sizing:border-box;display:flex;flex-direction:column}
+.doc table.pf-grid{width:100%;border-collapse:collapse;table-layout:fixed}
+.doc .pf-grid td{border:1px solid #000;padding:0 4px;font-size:12.5px;text-align:center;vertical-align:middle;overflow:hidden}
+.doc .pf-grid tr.r-title td{height:46px;border-top:0}
+.doc .pf-grid tr td:first-child{border-left:0}
+.doc .pf-grid tr td:last-child{border-right:0}
+.doc .pf-grid .pf-logo{text-align:left;padding:4px 6px;border-right:0!important;overflow:visible}
+.doc .pf-grid .pf-logo img{height:auto;max-height:38px;max-width:100%;width:auto;display:block;object-fit:contain}
+.doc .pf-grid .pf-title{font-size:27px;letter-spacing:6px;font-weight:400;border-left:0!important;text-align:center;padding-right:23.5%}
+.doc .pf-grid tr.r-h td{height:19px}
+.doc .pf-grid tr.r-b td{height:37px}
+.doc .pf-grid .pf-l{background:#d9d9d9!important;font-weight:700;letter-spacing:-.4px;white-space:nowrap;font-size:12px;padding:0 1px}
+.doc .pf-grid .pf-v.b{font-weight:700}
+.doc .pf-grid .pf-v.left{text-align:left;padding-left:12px}
+.doc .pf-grid .pf-sign{font-weight:400;color:#555}
+.doc .pf-grid .pf-gyeol{font-weight:700;padding:6px 0}
+.doc .pf-grid .pf-gyeol{display:table-cell}
+.doc .pf-grid .pf-gyeol span{display:block;line-height:1}
+.doc .pf-grid .pf-gyeol span+span{margin-top:78px}
+.doc .pf-grid .pf-at{font-weight:700;height:14px;white-space:nowrap;font-size:12px}
+.doc .pf-grid .pf-an{font-weight:700;white-space:nowrap;font-size:11.5px;letter-spacing:-.3px;padding:0 1px}
+.doc .pf-grid .pf-sg.x{background:linear-gradient(to top right,transparent calc(50% - .6px),#000 calc(50% - .6px),#000 calc(50% + .6px),transparent calc(50% + .6px))!important}
+.pf-body{padding:16px 0 10px}
+.pf-sec{display:flex;font-size:14px;margin:20px 0 7px}
+.pf-sec:first-child{margin-top:4px}
+.pf-sec .pf-no{width:3.6%;min-width:22px;text-align:right;padding-right:5px;font-weight:700;box-sizing:border-box}
+.pf-line{padding-left:calc(3.6% + 6px);font-size:12.5px;line-height:1.45;white-space:pre-wrap;margin:1px 0}
+.pf-in{padding:0 3% 0 calc(3.6% + 2px)}
+.pf-note{font-size:12px;margin:6px 0 0 6px;white-space:pre-wrap;line-height:1.4}
+.pf-unit{text-align:right;font-size:11.5px;margin:0 0 3px}
+/* 안쪽(하위) 항목: 앞 항목 안으로 한 칸 더 들여 씀 */
+.pf-sub{margin-top:6px}
+.pf-sub .pf-line:not(.pf-subt){padding-left:calc(3.6% + 6px + 1.2em)}
+.pf-sub .pf-in{padding-left:calc(3.6% + 2px + 1.2em)}
+/* 별첨: 품의서 다음 쪽 */
+.pf-annex{padding:10px 4px}
+.pf-annex-h{font-size:15px;font-weight:700;margin:0 0 10px}
+.pf-annex .pf-line{padding-left:0}
+.pf-annex .pf-in{padding:0}
+.doc table.pf-detail{width:100%;border-collapse:collapse}
+.doc .pf-detail th{background:#595959!important;color:#fff;font-weight:700;font-size:13.5px;border:1px solid #222;padding:5px 3px}
+.doc .pf-detail td{border:1px solid #333;font-size:13.5px;padding:3px 6px;height:25px}
+.doc .pf-detail .pf-tot td{background:#d9d9d9!important}
+.doc .pf-detail .num{text-align:right}
+/* 비교견적이 들어간 넓은 세부내역 표: 글자 줄이고, 확정 업체 칸 강조 (샘플 대비표처럼) */
+.doc .pf-detail.wide th,.doc .pf-detail.wide td{font-size:11px;padding:2px 3px;letter-spacing:-.3px}
+.doc .pf-detail th.pick{background:#fbe7b5!important;color:#000}
+.doc .pf-detail td.pick{font-weight:700}
+.doc table.pf-att{width:100%;border-collapse:collapse;table-layout:fixed}
+.doc .pf-att th{background:#d9d9d9!important;font-weight:700;font-size:12.5px;border:1px solid #333;padding:4px}
+.doc .pf-att td{border:1px solid #333;font-size:12.5px;text-align:center;height:24px}
+
+/* 품의서 블록 편집 */
+.form-grid label:has(>input[type=checkbox]){flex-direction:row;align-items:center;gap:4px}
+.form-grid input[type=checkbox],.pd-page input[type=checkbox]{width:15px;height:15px;min-height:0;padding:0;margin:0 4px 0 0;flex:none;box-shadow:none;vertical-align:middle}
+/* 품의서 작성 창: 묶음별 칸 · 블록 종류별 색 · 표는 엑셀처럼 칸선 */
+.pm-ed #pmAiWarn .banner{margin-bottom:12px}
+.pm-ed-sec{border:1px solid var(--line);border-radius:var(--r);padding:12px 14px 14px;margin:0 0 12px;background:#fff}
+.pm-ed-sec>h4{margin:0 0 10px;font-size:13px;font-weight:700;color:var(--ink);display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.pm-ed-sec>h4 .muted{font-weight:400;font-size:12px}
+.pm-ed-sec .form-grid{gap:10px 14px}
+.pm-ed-sec .form-grid label{font-weight:600;color:var(--ink-2)}
+.pm-ed-sec .form-grid label .muted{font-weight:400}
+.pm-ed .pm-lab{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pm-ed-opts label .muted{white-space:nowrap}
+.pm-ed input::placeholder,.pm-ed textarea::placeholder{font-weight:400;font-size:12px;color:#a0a8b5}
+.pm-ed-g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.pm-ed-g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.pm-ed-sec>h4 .grow{flex:1}
+.pm-ed-more{margin-top:10px;font-size:13px}
+.pm-ed-more>summary{cursor:pointer;color:var(--ink-2);font-weight:600}
+.pm-ed-more>summary .muted{font-weight:400;font-size:12px;margin-left:6px}
+.pm-ed-more .pm-ed-opts{margin-top:8px}
+/* 품의서 본문 [문서] 보기: 인쇄 모양 그대로 클릭해서 쓰기 */
+.pd-toolbar{position:sticky;top:-1px;z-index:5;display:flex;gap:6px;align-items:center;flex-wrap:wrap;max-width:880px;margin:0 auto 8px;padding:6px 8px;background:#fff;border:1px solid var(--line);border-radius:var(--r);box-shadow:0 1px 2px rgba(16,24,40,.06)}
+.pd-toolbar [data-pdbold]{min-width:32px}
+.pd-sep{width:1px;height:20px;background:var(--line);margin:0 2px}
+.pd-page{max-width:880px;margin:0 auto;min-height:260px;padding:22px 30px 26px;background:#fff;border:1px solid var(--line);box-shadow:0 1px 4px rgba(16,24,40,.08);font-size:14px;line-height:1.7;color:#111;box-sizing:border-box}
+.pd-blk{position:relative;display:grid;grid-template-columns:24px minmax(0,1fr);padding:4px 8px;margin:0 -8px 8px;border-radius:6px}
+.pd-blk:hover,.pd-blk:focus-within{background:#f5f8fd}
+.pd-no{font-weight:700}
+.pd-main{min-width:0}
+.pd-blk [contenteditable="true"]{outline:none;border-radius:3px;min-height:1.7em;cursor:text}
+.pd-blk [data-df]:focus{background:#fff;box-shadow:0 0 0 2px #c9d7f5}
+.pd-blk [data-ph]:empty:before{content:attr(data-ph);color:#a0a8b5;font-weight:400;pointer-events:none}
+.pd-title{font-weight:700}
+.pd-text.lead::first-line{font-weight:700}
+.pd-text,.pd-note{white-space:pre-wrap}
+.pd-sub{margin-left:16px}
+.pd-sub>.pd-no{border-left:2px solid #c9d7f5}
+.pd-annex{border:1px dashed #c27c0e;background:#fffaf1}
+.pd-annex-tag{display:inline-block;font-size:11px;font-weight:700;color:#a5680a;background:#fdf3e1;border-radius:4px;padding:0 4px;writing-mode:horizontal-tb}
+.pd-annex>.pd-no{width:auto}
+.pd-blk.pd-annex{grid-template-columns:40px minmax(0,1fr)}
+.pd-bar select{font-size:12px;padding:1px 2px;border:1px solid var(--line);border-radius:4px;min-height:0}
+.pd-mark{font-size:12px;padding:1px 2px;border:0;background:#f3f5f8;border-radius:10px;min-height:0;width:auto}
+.pd-unit{text-align:right;font-size:12.5px}
+.pd-note{font-size:13px;margin-top:4px}
+/* 비어 있는 단위·메모 칸은 그 항목에 마우스를 올리거나 쓰는 중일 때만 보임 */
+.pd-blk:not(:hover):not(:focus-within) .pd-unit:empty,.pd-blk:not(:hover):not(:focus-within) .pd-note:empty{min-height:0;height:0;overflow:hidden}
+.pd-bar{position:absolute;top:-12px;right:6px;z-index:2;display:flex;gap:2px;align-items:center;padding:1px 4px;background:#fff;border:1px solid var(--line);border-radius:6px;font-size:12px;box-shadow:0 1px 3px rgba(16,24,40,.1);opacity:0;pointer-events:none;transition:opacity .12s}
+.pd-bar>.muted{padding:0 4px}
+.pd-bar label{display:inline-flex;align-items:center;gap:2px;padding:0 4px}
+.pd-blk:hover>.pd-bar,.pd-blk:focus-within>.pd-bar{opacity:1;pointer-events:auto}
+table.pd-tbl{width:100%;border-collapse:collapse;font-size:13px;margin:2px 0}
+.pd-tbl th,.pd-tbl td{border:1px solid #8f98a6;padding:4px 6px;min-width:36px;text-align:center;vertical-align:middle}
+.pd-tbl th{background:#eef1f5;font-weight:700}
+.pd-tbl td.num{text-align:right}
+.pd-tbl [contenteditable="true"]:focus{outline:2px solid #2b59c3;outline-offset:-2px;background:#fff}
+.pd-tbl tr.pd-tot td{background:#eceff3;font-weight:700}
+.pd-tbl tfoot td{background:#f3f5f8;font-weight:700;color:var(--ink-2)}
+.pd-tools{display:none;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px;font-size:12px}
+.pd-tools.on,.pd-blk:hover .pd-tools,.pd-blk:focus-within .pd-tools{display:flex}
+.pd-tools label{display:inline-flex;align-items:center;gap:3px}
+.pd-att{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.pd-chip{display:inline-flex;align-items:center;gap:2px;border:1px solid var(--line);border-radius:14px;padding:1px 2px 1px 8px;background:#fff;font-size:13px}
+.pd-chip input[data-ai]{border:0;outline:0;width:130px;font:inherit;background:transparent;padding:2px}
+.pd-chip .btn{padding:1px 4px}
+.pd-file{display:inline-flex;gap:4px;align-items:center;margin-right:10px}
+.pd-menu{position:fixed;z-index:3000;min-width:150px;padding:4px;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 20px rgba(16,24,40,.18)}
+.pd-menu button{display:block;width:100%;text-align:left;border:0;background:none;padding:6px 10px;border-radius:5px;font:inherit;font-size:13px;cursor:pointer}
+.pd-menu button:hover{background:var(--accent-soft)}
+.pd-menu button.danger{color:#c0392b}
+@media (max-width:700px){.pd-page{padding:14px 12px}}
+.pm-ed-g3 .pm-ed-title{grid-column:span 2}
+.pm-ed-g3 .pm-ed-title input{font-size:15px;font-weight:700}
+.pm-ed-opts{display:flex;flex-wrap:wrap;gap:6px 24px;margin-top:12px;padding-top:10px;border-top:1px dashed var(--line);font-size:13px}
+.pm-ed-opts label{display:flex;align-items:center;gap:4px}
+.pm-ed-opts input[type=checkbox]{width:15px;height:15px;margin:0 4px 0 0}
+.pm-ed-body{background:#f7f8fa}
+@media (max-width:900px){.pm-ed-g4,.pm-ed-g3{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.pm-preview{background:#fff;padding:8px;border:1px solid var(--line);max-height:70vh;overflow:auto}
+.pm-preview .pf-frame{min-height:0}
+
+/* 남은 일 칩 */
+.chip.warn{border-color:#f0b36a;background:#fff6ea;color:#9a4b00}
+.chip.ok{border-color:#9fd6a8;background:#eefaf0;color:#1f7a32;cursor:default}
+button.chip.ok{cursor:pointer}
+a.badge{text-decoration:none;cursor:pointer}
+
+/* ===== 자금청구서 (회사 양식) ===== */
+.doc .pf-grid.fc .pf-v.left{padding-left:6px}
+.fc-body .pf-sec{margin-top:26px}
+.doc table.fc-tbl{width:100%;border-collapse:collapse}
+.doc .fc-tbl th{background:#fbe5d6!important;font-weight:700;font-size:12.5px;border:1px solid #333;padding:4px 3px}
+.doc .fc-tbl th.cap{background:#fff!important;font-size:13px}
+.doc .fc-tbl td{border:1px solid #333;font-size:12.5px;padding:3px 6px;height:24px}
+.doc .fc-tbl.fc-mon td{font-size:11.5px;padding:3px 4px}
+.doc .fc-tbl .num{text-align:right}
+.doc .fc-tbl .fc-sum td{background:#ebf1de!important}
+.doc .fc-tbl .cur.l{border-left:2.5px solid #e00}
+.doc .fc-tbl .cur.r{border-right:2.5px solid #e00}
+.doc .fc-tbl th.cur.t{border-top:2.5px solid #e00;border-left:2.5px solid #e00;border-right:2.5px solid #e00}
+.doc .fc-tbl .b2{border-bottom:2.5px solid #e00}
+/* ===== 지출결의서 — 원본 엑셀 "지출결의서" 시트 그대로 (열 너비 px · 행 높이 pt · 맑은 고딕 10pt 굵게, 인쇄 배율 74% · 여백 왼쪽 6.35mm 위 19.05mm) ===== */
+/* ===== 엑셀 저장용 회사 표 모양 (16_export xtHtml) — 회색 머리글 · 검은 테두리 · 소계 살구색 · 합계 진한 살구색 ===== */
+.doc.xt{width:max-content;font-family:"Malgun Gothic","맑은 고딕",sans-serif;color:#000}
+.doc .xt-title{font-size:18px;font-weight:700;margin:0 0 4px}
+.doc .xt-sub{font-size:12px;margin:0 0 6px}
+.doc table.xt-tbl{width:auto;table-layout:fixed;border-collapse:collapse;border:1.5px solid #000}
+.doc .xt-tbl th,.doc .xt-tbl td{border:1px solid #000;padding:2px 5px;font-size:12px;height:22px;white-space:nowrap;overflow:hidden;background:#fff;font-weight:400}
+.doc .xt-tbl th{background:#d9d9d9!important;font-weight:700;text-align:center}
+.doc .xt-tbl .n{text-align:right}
+.doc .xt-tbl .c{text-align:center}
+.doc .xt-tbl .red{color:#e00}
+.doc .xt-tbl .l{text-align:left;white-space:normal}
+.doc .xt-tbl .b{font-weight:700}
+/* 예산·손익 보기 전환 2단: [예산][손익] (검은 알약) 아래 세부 보기 (작게, 파랑) */
+.subtabs.bg-top{margin-bottom:6px}
+.subtabs.bg-top button{font-size:14px;font-weight:700;padding:6px 20px}
+.subtabs.sub2 button{font-size:12px;padding:4px 11px}
+.subtabs.sub2 button.active{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+/* 예산 (14c_budget) — 틀 고정: 표 상자 안에서 세로로 스크롤 → 머리글(구분·세부·단계·단가…)이 위에 붙어 있음 */
+.tbl-wrap.bg-wrap{overflow:auto;max-height:calc(100vh - var(--top) - 40px)}
+table.bg-tbl td:first-child,table.bg-tbl th:first-child{position:sticky;left:0;z-index:1;background:#fff}
+table.bg-tbl th:first-child{z-index:3;background:#f8f9fb}
+table.bg-tbl tr.bg-acc td:first-child{background:#f3f5f9}
+table.t.bg-cal thead{position:sticky;top:var(--sh,0px);z-index:2}
+table.t.bg-cal thead th{position:static}
+table.t.bg-cal thead th.bg-st{position:sticky;left:0}
+table.bg-tbl tr.bg-acc td{background:#e9edf3;border-top:2px solid var(--line)}
+table.bg-tbl tr.bg-gap td{height:22px;padding:0;border:0;background:#f4f6f9!important}   /* 계정 사이 띄우기 */
+table.bg-tbl .bg-grip{cursor:grab;color:var(--muted);padding:0 5px 0 0;user-select:none;font-size:14px;vertical-align:middle}
+table.bg-tbl .bg-grip:hover{color:var(--accent)}
+table.bg-tbl tr.bg-dragging td{opacity:.4}
+table.bg-tbl tr.bg-drop-before td{box-shadow:inset 0 3px 0 var(--accent)}
+table.bg-tbl tr.bg-drop-after td{box-shadow:inset 0 -3px 0 var(--accent)}
+table.bg-tbl tr.bad-row td{background:var(--bad-soft)}
+table.bg-tbl input.bg-g{min-width:120px}
+table.bg-tbl input.bg-n{min-width:150px}
+table.bg-tbl input.bg-q{min-width:52px;width:52px}
+table.bg-tbl input.bg-d{min-width:56px;width:56px}
+table.bg-tbl input.bg-p{min-width:92px;width:92px}
+table.bg-tbl input.bg-m{min-width:140px}
+table.bg-tbl td.bg-claim{white-space:nowrap}
+table.bg-tbl td.bg-claim input[type=checkbox]{vertical-align:middle;margin:0 4px 0 2px}
+table.bg-tbl input.bg-cap{min-width:120px;width:120px;vertical-align:middle}
+.bg-meta .bg-phases{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;margin-top:10px}
+.bg-meta .bg-ph{display:inline-flex;gap:4px;align-items:center}
+td.bg-vc select{min-width:150px;max-width:190px}
+.bg-caltool{gap:8px;align-items:center;margin:4px 0 8px}
+table.bg-cal th,table.bg-cal td.bgc{min-width:24px;padding:2px 1px;text-align:center;font-size:12px}
+table.bg-cal td.bgc.sel{box-shadow:inset 0 0 0 2px var(--accent);background:var(--accent-soft)!important;color:var(--accent)}
+table.bg-cal .bg-st{position:sticky;left:0;z-index:1;background:#fff;min-width:150px;text-align:left;padding:2px 8px}
+table.bg-cal thead .bg-st{z-index:3;background:#f3f5f9}
+.bg-caltool{flex-wrap:wrap;row-gap:4px}
+.bg-caltool [data-act="bgCalGo"]{padding:2px 7px}
+.bg-calsep{display:inline-block;width:1px;height:18px;background:var(--line);margin:0 4px;align-self:center}
+.bg-help{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:var(--r-sm);padding:2px 8px;cursor:help;white-space:nowrap}
+/* 날짜별 일정: 단계별 합계 = 탭 줄 오른쪽 */
+.subtabs.sub2 .bg-calstats{margin-left:auto;display:flex;align-items:center;gap:4px 14px;flex-wrap:wrap;font-size:13px}
+.bg-calstats .bg-cs{white-space:nowrap}
+.bg-calstats b{font-variant-numeric:tabular-nums}
+/* 화면 나누기: 위 메뉴 / 아래 표 상자가 창 바닥까지 (04 frameWraps 가 높이를 넣음) */
+.tbl-wrap.bg-calwrap{overflow:auto}
+body.frame-view main{padding-bottom:0}
+table.bg-cal tr.bg-nocal td{color:var(--muted)}
+table.bg-cal tr.bg-nocal td.bg-st b{font-weight:600}   /* 아직 수량 × 일수로 넣은 줄 (칸에 넣으면 날짜 기준) */
+table.bg-cal tr.bg-calacc td{background:#e9edf3;border-top:2px solid var(--line);padding:3px 8px;font-size:12px}   /* 날짜별 일정: 계정 머리 줄 */
+table.bg-cal th.bg-open{background:#ffe8a3!important}
+table.bg-cal th.bg-key{background:#d0ebff!important}
+table.bg-cal th.bg-phb.ph0{background:#e7f5ff}
+table.bg-cal th.bg-phb.ph1{background:#ebfbee}
+table.bg-cal th.bg-phb.ph2{background:#fff4e6}
+table.bg-cal th.bg-phb.ph3{background:#f3f0ff}
+td.bg-vc .badge{display:block;margin-top:2px;white-space:normal}
+td.bg-vc label{display:flex;gap:4px;align-items:center;margin-top:2px;white-space:nowrap}
+.doc .xt-tbl tr.xt-sum td{background:#fde9d9!important;font-weight:700}
+.doc .xt-tbl tr.xt-tot td{background:#fcd5b4!important;font-weight:700}
+/* 엑셀로 옮길 때(화면 밖에서 잼): 지출결의서 74% 축소를 풀어 100% 크기로 */
+.xl-host .doc.ex .ex-frame{zoom:1}
+.xl-host .doc{margin:0}
+
+/* ===== 인건비 세부내역 (회사 양식, A4 가로): 머리글 연한 녹색 · 구분/번호 연노랑 · 소계 살구색 · 합계 진한 살구색 · 원천세 빨간 글씨 ===== */
+@page pdland{size:A4 landscape;margin:10mm 8mm}
+.doc.pd{page:pdland;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-family:"Malgun Gothic","맑은 고딕",sans-serif}
+.doc .pd-title{text-align:center;font-size:20px;font-weight:700;margin:0 0 3mm}
+.doc table.pd-tbl{table-layout:fixed;border-collapse:collapse;border:2px solid #000}
+.doc .pd-tbl th,.doc .pd-tbl td{border:1px solid #666;font-size:10.5px;padding:1px 4px;height:6.4mm;white-space:nowrap;overflow:hidden;background:#fff;font-weight:400}
+.doc .pd-tbl th{background:#eef0dc!important;font-weight:700;text-align:center;line-height:1.25;font-size:9.5px;height:auto;padding:3px 2px}
+.doc .pd-tbl .n{text-align:right;font-variant-numeric:tabular-nums}
+.doc .pd-tbl .c{text-align:center}
+.doc .pd-tbl .red{color:#e04848}
+.doc .pd-tbl td.pd-team{background:#fff2cc!important;font-weight:700;text-align:center;line-height:1.15;white-space:normal}
+.doc .pd-tbl td.pd-no{background:#fff2cc!important;font-weight:700;text-align:center}
+.doc .pd-tbl tr.pd-sub td{background:#fde9d9!important;font-weight:700}
+.doc .pd-tbl tr.pd-tot td{background:#fcd5b4!important;font-weight:700;border-top:2px solid #000}
+.doc .pd-tbl .pd-l{border-left:2px solid #000}
+
+@page exland{size:A4 landscape;margin:19.05mm 6.35mm 8mm}
+.doc.ex{page:exland;font-family:"Malgun Gothic","맑은 고딕",sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;color:#000;padding:0}
+.doc.ex .ex-frame{zoom:.74;width:623px}
+.doc table.ex-tbl{width:623px;border-collapse:collapse;table-layout:fixed;margin:0;border:1px solid #000}
+.doc .ex-tbl td{border:1px solid #000;font-size:10pt;font-weight:700;line-height:1.15;padding:0 2px;text-align:center;vertical-align:middle;background:#fff;white-space:nowrap;overflow:hidden}
+.doc .ex-tbl tr.ex-r12 td{height:45.75pt}
+.doc .ex-tbl tr.ex-r3 td{height:36pt}
+.doc .ex-tbl tr.ex-a td{height:15.75pt}
+.doc .ex-tbl tr.ex-a2 td{height:31.5pt}
+.doc .ex-tbl tr.ex-m td{height:22.2pt}
+.doc .ex-tbl tr.ex-i td{height:21pt}
+.doc .ex-tbl tr.ex-f td{height:31.5pt}
+.doc .ex-tbl .ex-logo{padding:0;text-align:left;vertical-align:top}
+.doc .ex-logo img{display:block;width:131px;height:auto;margin:8px 0 0 4px}   /* 원본 로고 비율 그대로 (찌그러지지 않게) */
+.doc .ex-tbl .ex-title{font-size:15pt}
+.doc .ex-sg.x{background:linear-gradient(to top right,transparent calc(50% - .6px),#000 calc(50% - .6px),#000 calc(50% + .6px),transparent calc(50% + .6px))!important}
+.doc .ex-tbl .ex-kor{text-align:right}
+.doc .ex-tbl .ex-won{padding:0 7px}
+.doc .ex-won span:first-child{float:left}
+.doc .ex-won span:last-child{float:right}
+.doc .ex-mgr .sign-img{height:24px;max-width:90px}
+.doc .ex-mgr span{margin-left:12px}
+.doc .ex-tbl .ex-t,.doc .ex-tbl .ex-n,.doc .ex-tbl .ex-note,.doc .ex-tbl .ex-tot{font-weight:400}
+.doc .ex-tbl .ex-n{text-align:right;padding-right:8px;font-variant-numeric:tabular-nums}
+.doc .ex-tbl .ex-note{text-align:left;padding-left:3px}
+.doc .ex-tbl tr.ex-head td{background:#fbe5d6!important;font-weight:700}
+.doc .ex-tbl .ex-fc{border:0}
+.doc .ex-tbl .ex-nl{border-left:0}
+.doc .ex-tbl .ex-nr{border-right:0}
+.doc .ex-tbl .ex-fc.right{text-align:right}
+
+.doc table.fc-tbl.fixed{table-layout:fixed}
+.doc .fc-tbl td{white-space:nowrap;overflow:hidden;text-overflow:clip}
+.doc .fc-tbl.fc-mon td,.doc .fc-tbl.fc-mon th{font-size:10px;padding:2px 3px;height:21px;letter-spacing:-.3px}
+.doc .fc-tbl.fc-mon th{font-size:10.5px}
+.doc .fc-tbl.fc-mon td.small{font-size:8.3px;letter-spacing:-.4px;padding:2px 1px}
+.doc .fc-tbl.fc-mon td.wrap{white-space:normal;line-height:1.12}   /* 비고의 기간: 잘리지 않게 ~ 뒤에서 두 줄 */
+/* ===== 품의서 양식 고르기 ===== */
+.pm-tplg{margin-bottom:12px}
+.pm-tpls{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px;margin-top:4px}
+.pm-tpl{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;border:1px solid var(--line);border-radius:8px;background:#fff;padding:9px 11px;cursor:pointer;font:inherit}
+.pm-tpl:hover{border-color:var(--accent);background:#f5f9ff}
+.pm-tpl b{font-size:14px;font-weight:600}
+.pm-tpl{justify-content:center;min-height:44px}
+.pm-tplhint{min-height:40px;margin-top:4px;padding:9px 12px;border-radius:8px;background:var(--line-2);color:var(--muted);font-size:13px;line-height:1.45}
+.pm-tplhint.on{background:var(--accent-soft);color:var(--ink)}
+
+/* ===== 경영지원 점검 표시 (사용내역 칸 아래) ===== */
+.txnote{margin-top:3px;display:flex;flex-wrap:wrap;gap:3px 4px;align-items:center;font-size:11px;line-height:1.5}
+.mw{padding:0 5px;border-radius:4px;background:#f2f4f7;color:var(--muted)}
+.mw.warn{background:var(--warn-soft);color:var(--warn)}
+.mw.ok{background:var(--ok-soft);color:var(--ok)}
+.lnk{border:0;background:none;color:var(--accent);cursor:pointer;font-size:11px;padding:0 2px;text-decoration:underline}
+.lnk:hover{color:#000}
+table.grid td.cell.ph{background:#eef4ff;color:#3b5bdb;font-weight:700}
+table.grid td.cell.ms{background:#fff4e6;color:#d9480f;font-weight:700}
+table.grid td.cell.late{background:#fff0f6;color:#c2255c;font-weight:700}
+table.grid td.cell.lateok{background:var(--ok-soft);color:#e03131;font-weight:700}
+select.ck-ok{color:var(--ok);font-weight:700}
+select.ck-miss{color:var(--bad);font-weight:700;background:var(--bad-soft)}
+select.ck-na{color:var(--muted)}
+input.needbox{border-color:var(--warn)!important;background:var(--warn-soft)}
+.sign-img{height:9mm;max-width:32mm;vertical-align:middle;object-fit:contain}
+
+/* ===== 법인카드 사용내역서 (20만원 이상) — A4 세로 ===== */
+.doc.u2{font-size:14px}
+/* 치수는 결재 스캔본(2026.08.03)에서 잰 값 */
+.u2-top{display:flex;align-items:flex-start;margin-bottom:1.2mm}
+.u2-logo{width:34.5mm;height:auto;flex:none;margin-top:8mm}   /* 원본 로고 비율 그대로 */
+.doc .u2-title{flex:1;font-size:27px;font-weight:700;text-align:center;margin:9.5mm 0 0;letter-spacing:1px}
+.doc table.u2-appr{width:auto;border-collapse:collapse;border:1px solid #000;flex:none}
+.doc .u2-appr th,.doc .u2-appr td{border:1px solid #000;width:18.5mm;min-width:18.5mm;text-align:center;font-size:10px;font-weight:700;padding:0 2px;background:#fff;height:5.6mm;white-space:nowrap}
+.doc .u2-appr .sg{height:15.7mm}
+.doc .u2-appr .x{background:linear-gradient(to top right,transparent calc(50% - .5px),#000 calc(50% - .5px),#000 calc(50% + .5px),transparent calc(50% + .5px))!important}
+.doc .u2-appr .mgrn .pf-sign{font-weight:700;color:#000}
+.doc .u2-appr .mgrn .sign-img{height:5mm}
+.doc table.u2-tbl{border:1px solid #000;border-collapse:collapse;table-layout:fixed}
+.doc .u2-tbl th,.doc .u2-tbl td{border:1px solid #000;font-size:14px;font-weight:400;background:#fff;height:9.5mm}
+.doc .u2-tbl th{text-align:center}
+.doc .u2-tbl tr.u2-h th{background:#d8e4bc!important;font-weight:700;height:8mm}
+.doc .u2-tbl .c{text-align:center}
+.doc .u2-tbl .pre{white-space:pre-line;line-height:1.5;padding-left:2px}
+.doc .u2-tbl tr.u2-purp th,.doc .u2-tbl tr.u2-purp td{height:11.5mm}
+.doc .u2-tbl tr.u2-att th,.doc .u2-tbl tr.u2-att td{height:37mm}
+.doc .u2-tbl tr.u2-rc td{height:125mm;vertical-align:middle;padding:3mm}
+.u2-imgs{display:flex;gap:4mm;justify-content:center;align-items:center;height:119mm;overflow:hidden}
+.u2-imgs img{max-height:119mm;max-width:100%;object-fit:contain;min-width:0;flex:0 1 auto}
+.doc .u2-foot{font-size:13px;padding:1mm 0 0 1mm}
+
+/* ===== 입고 사진 정리 — A4 가로, 한 장에 2건 ===== */
+@page phland{size:A4 landscape;margin:8mm}
+.doc.ph{page:phland;height:190mm;display:flex;flex-direction:column;gap:3mm;box-sizing:border-box}
+.ph-head{display:flex;justify-content:space-between;border-bottom:1.5px solid #000;padding:1mm 1mm 2mm;font-size:16px}
+.ph-sec{flex:1;display:flex;flex-direction:column;min-height:0;border:1px solid #999;padding:2mm}
+.ph-cap{font-size:13px;margin-bottom:2mm}
+.ph-imgs{flex:1;display:grid;gap:2mm;min-height:0}
+.ph-imgs.n1{grid-template-columns:1fr}
+.ph-imgs.n2{grid-template-columns:repeat(2,1fr)}
+.ph-imgs.n3{grid-template-columns:repeat(3,1fr)}
+.ph-imgs.n4{grid-template-columns:repeat(4,1fr)}
+.ph-imgs img{width:100%;height:100%;max-height:78mm;object-fit:contain;min-height:0}
+
+/* ===== 화면 부품 (메뉴 · 요약 줄 · 남은 일 · 빠른 입력 · 파일 보관) — 위의 디자인 기준 값만 사용 ===== */
+details.dd{position:relative;display:inline-block}
+details.dd>summary{list-style:none;display:inline-flex}
+details.dd>summary::-webkit-details-marker{display:none}
+details.dd[open]>summary{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.dd-car{font-size:10px;color:var(--muted)}
+.dd-m{position:absolute;right:0;top:calc(100% + 4px);z-index:40;background:#fff;border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--pop);min-width:250px;padding:4px}
+.dd-i{display:flex;flex-direction:column;align-items:flex-start;gap:1px;width:100%;border:0;background:none;text-align:left;padding:8px 10px;border-radius:var(--r-sm);cursor:pointer;font-size:13px;color:var(--ink)}
+.dd-i:hover{background:var(--hover)}
+.dd-i small{color:var(--muted);font-size:12px}
+
+/* 요약 줄 */
+/* 요약 상자: 법인카드·식대의 .sumbar 도 전도금·월결제·인건비의 .stats/.stat 과 같은 모양 (떨어진 상자 · 숫자 18px) */
+.sumbar{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px}
+.sumbar .sb{display:flex;flex-direction:column;background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:12px 16px;min-width:150px}
+.sumbar .sb span{font-size:12px;color:var(--muted)}
+.sumbar .sb b{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+.sumbar .sb.warn{background:var(--warn-soft);border-color:var(--warn-line)}
+.sumbar .sb.warn b{color:var(--warn)}
+.sumbar .sb-sel{flex-direction:row;align-items:center;gap:6px;margin-left:auto;min-width:0;border:0;background:none;padding:0;font-size:12px;color:var(--muted)}
+.sumbar .sb-sel select{height:30px;border:1px solid var(--line);border-radius:var(--r-sm);padding:0 8px;background:#fff}
+
+/* 남은 일 · 걸러 보기 */
+.issuebar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:12px}
+.ib-l,.qb-l{font-size:12px;font-weight:600;color:var(--muted);margin-right:4px}
+.ib{border:1px solid var(--line);background:#fff;border-radius:999px;padding:3px 12px;font-size:12px;color:var(--ink-2);cursor:pointer}
+.ib:hover{background:var(--hover)}
+.ib.warn{border-color:var(--warn-line);background:var(--warn-soft);color:var(--warn)}
+.ib.active{background:var(--ink);border-color:var(--ink);color:#fff}
+.ib.ok{border-color:#c6e7d4;background:var(--ok-soft);color:var(--ok);cursor:default}
+
+/* 빠른 입력 · 도구 줄 */
+.quickbar,.toolbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:8px 12px;margin-bottom:12px}
+/* 빠른 입력: 목록을 내려도 상단바 바로 아래에 붙어 있음 (아래쪽 줄에서도 바로 누를 수 있게) */
+.quickbar{position:sticky;top:var(--top);z-index:20;box-shadow:0 2px 6px rgba(0,0,0,.06)}
+.qb-sep{width:1px;height:18px;background:var(--line);margin:0 4px}
+.qb-h{font-size:12px;color:var(--muted);margin-left:auto}
+
+/* 파일 보관 */
+details.files>summary{cursor:pointer}
+.files-g{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:10px}
+.fg-h{font-weight:700;font-size:13px}
+@media (max-width:900px){.files-g{grid-template-columns:1fr}}
+
+/* 사용내역 칸 아래 점검 표시 */
+.mwg{display:inline-flex;align-items:center;gap:1px;border:1px solid var(--line);border-radius:5px;padding:0 2px 0 0;background:#fff}
+.mwg .mw{border-radius:4px 0 0 4px}
+.txnote{gap:4px}
+
+/* 식대·출근부: 현장 / 정직원 / 캐터링 칸 */
+.seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:14px}
+.seg-b{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;border:1px solid var(--line);background:#fff;border-radius:var(--r);padding:12px 16px;cursor:pointer}
+.seg-b:hover{border-color:#c9d3e2}
+.seg-b b{font-size:15px;color:var(--ink)}
+.seg-b small{color:var(--muted);font-size:12px}
+.seg-b.active{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);background:var(--accent-soft)}
+.seg-b.active b{color:var(--accent)}
+.seg-n{font-size:12px;font-weight:400;color:var(--muted);margin-left:2px}
+
+/* 업무 홈 */
+.home-hero{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:0 0 18px;padding-bottom:16px;border-bottom:1px solid var(--line)}
+.home-hero h1{margin:2px 0 4px;font-size:20px;font-weight:700}   /* 다른 탭 제목(.phd-t h2)과 같은 크기 */
+.home-hero p,.section-heading p,.setup-heading p{margin:0;color:var(--muted);font-size:12px}
+.eyebrow{color:var(--muted);font-size:12px;font-weight:600}
+.section-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}
+.section-heading h2{margin:0 0 2px}
+.today-date{flex:0 0 auto;color:var(--muted);font-size:12px;font-weight:600;background:#f3f5f8;padding:4px 10px;border-radius:var(--r-sm)}
+.setup-card{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:18px 20px;margin-bottom:16px}
+.setup-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px}
+.setup-heading .eyebrow{display:none}
+.setup-heading h2{margin:0 0 2px}
+.setup-progress{flex:0 0 auto;color:var(--accent);background:var(--accent-soft);padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700}
+.setup-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.setup-step{display:flex;align-items:center;gap:10px;min-width:0;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r);background:#fff;text-align:left;cursor:pointer}
+.setup-step:hover{border-color:#c9d3e2;background:var(--hover)}
+.setup-number{display:grid;place-items:center;flex:0 0 26px;height:26px;border-radius:50%;background:#eef1f5;color:var(--ink-2);font-size:12px;font-weight:700}
+.setup-step.is-done .setup-number{background:var(--ok-soft);color:var(--ok)}
+.setup-step>span:nth-child(2){display:flex;flex-direction:column;min-width:0}
+.setup-step b{font-size:13px;color:var(--ink)}
+.setup-step small{color:var(--muted);font-size:12px}
+.setup-arrow{margin-left:auto;white-space:nowrap;color:var(--accent);font-size:12px;font-weight:600}
+.setup-step.is-done .setup-arrow{color:var(--muted)}
+
+/* ===== 좁은 화면: 메뉴를 위쪽 가로줄로 ===== */
+@media (max-width:900px){
+  .topbar{position:static;height:auto;flex-wrap:wrap;padding:10px 14px;gap:8px 12px}
+  .brand{width:auto;flex:1 1 100%;padding-left:0}
+  .brand .ver{display:inline;margin-left:6px}
+  .tabs{position:sticky;top:0;bottom:auto;width:100%;flex-direction:row;gap:4px;padding:6px 10px;border-right:0;border-bottom:1px solid var(--line);overflow-x:auto}
+  .nav-group{flex-direction:row}
+  .nav-group+.nav-group{border-top:0;border-left:1px solid var(--line);padding:0 0 0 4px}
+  .tabs .nav-item{width:auto;flex:0 0 auto;height:34px}
+  .tabs .nav-bottom{margin-top:0}
+  .quickbar{top:47px}   /* 상단바는 고정 안 됨 → 메뉴 줄(34px + 위아래 여백) 바로 아래 */
+  main{margin-left:0;padding:16px 14px 48px}
+  .phd-t{flex:1 1 100%}
+  .phd-a{justify-content:flex-start}
+}
+@media (max-width:620px){
+  .panel,.setup-card{padding:14px}
+  .home-hero{flex-direction:column;align-items:flex-start}
+  .task{align-items:flex-start;flex-wrap:wrap;gap:8px}
+  .task>.grow{flex:1 1 calc(100% - 78px);min-width:0}
+  .task>.btn,.task>label{margin-left:78px}
+  .stat{min-width:calc(50% - 5px);flex:1}
+  .form-grid,.seg{grid-template-columns:1fr}
+  .modal-bg{padding:14px 8px}
+  .modal{padding:16px 14px}
+}
+
+/* 증빙철 인쇄: 배경색 없이 흰 바탕 */
+@media print{
+  #printArea .doc.rcpage,#printArea .doc.rcpage *{background-color:#fff!important;background-image:none!important;box-shadow:none!important}
+}
+
+/* 기간 달력 (04 rngOpen): 시작일 → 종료일 */
+input[data-rng]{cursor:pointer}
+input[data-rng]::-webkit-calendar-picker-indicator{display:none}
+.rng-pop{position:fixed;z-index:70;background:#fff;border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--pop);padding:12px 14px;max-width:calc(100vw - 16px);box-sizing:border-box}
+.rng-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.rng-box{flex:1;min-width:130px;border:1px solid var(--line);border-radius:var(--r-sm);padding:4px 10px;cursor:pointer}
+.rng-box span{display:block;font-size:11px;color:var(--muted)}
+.rng-box b{font-size:13px}
+.rng-box.on{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.rng-arr{color:var(--muted)}
+.rng-body{display:flex;align-items:flex-start;gap:14px}
+.rng-nav{border:0;background:none;font-size:22px;line-height:1;padding:28px 2px 0;color:var(--ink-2);cursor:pointer}
+.rng-nav:hover{color:var(--accent)}
+.rng-mt{text-align:center;font-weight:600;margin-bottom:6px}
+.rng-g{display:grid;grid-template-columns:repeat(7,34px);row-gap:2px}
+.rng-g b{font-size:11px;font-weight:500;color:var(--muted);text-align:center;padding-bottom:2px}
+.rng-g button{height:32px;border:0;background:none;font-size:13px;color:var(--ink);cursor:pointer;border-radius:0}
+.rng-g .sun{color:#d33}.rng-g .sat{color:#2b59c3}
+.rng-g button:hover{background:var(--hover);border-radius:var(--r-sm)}
+.rng-g button.today{font-weight:700;text-decoration:underline}
+.rng-g button.in{background:var(--accent-soft)}
+.rng-g button.sa,.rng-g button.sb{background:var(--accent);color:#fff;font-weight:600;border-radius:var(--r-sm)}
+.rng-foot{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line-2)}
+input[data-rng="one"]{background:#fff;min-width:230px}
+
+/* 월결제 · 업체별 월 지출 (09 viewMonthlyYear) */
+.my-seg{display:inline-flex;gap:0;margin-right:8px}
+.my-seg .btn{border-radius:0}
+.my-seg .btn:first-child{border-radius:var(--r) 0 0 var(--r)}
+.my-seg .btn:last-child{border-radius:0 var(--r) var(--r) 0;margin-left:-1px}
+table.my-tbl td,table.my-tbl th{white-space:nowrap}
+table.my-tbl td input.num{width:96px}
+table.my-tbl .my-v{position:sticky;left:0;z-index:1;background:#fff;min-width:170px;white-space:normal;line-height:1.35}
+table.my-tbl thead .my-v{z-index:3;background:#f8f9fb}   /* 가로로 넘긴 달 이름이 "업체" 머리칸 뒤로 비치지 않게 불투명 */
+table.my-tbl tr.sum .my-v{background:#f8f9fb}
+table.my-tbl td.my-chg,table.my-tbl td.my-chg input{background:#fff6d6}
+table.my-tbl th.my-cur{box-shadow:inset 0 -3px 0 var(--accent,#2b59c3)}
+
+/* 캐터링: 달 중간에 업체가 바뀐 날 (08 mealCater) */
+tr.cater-chg td{border-top:2px solid #e0a43a}
+.cater-vendors table.t td input{min-height:28px}
+
+/* 전도금 집행내역 (07 viewCash): 가로 스크롤 없이 — 칸 여백 줄이고 금액 한 칸, 화면이 좁으면 청구서를 표 아래로 */
+table.cash-tx th,table.cash-tx td{padding:5px 5px}
+table.cash-tx input[type=date]{width:118px;padding:3px 2px}
+table.cash-tx select[data-f=kind]{min-width:56px;padding:3px 2px}
+.cash-in,table.cash-tx input.cash-in{color:#1d5fd1;font-weight:600}
+/* 전도금 신청 창 (07 cashClaimDialog) */
+.modal.cq-modal{max-width:720px}
+.cq .stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}   /* 요약 상자 5개를 한 줄에 */
+.cq .stats .stat{padding:8px 10px;min-width:0}
+.cq .stats .stat .v{font-size:16px}
+.cq-add{margin-top:10px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.cq-add.low{border-color:var(--warn);background:var(--warn-soft)}
+.cq-total{margin-top:12px;padding:10px 14px;border-radius:8px;background:var(--accent-soft);display:flex;align-items:center;gap:8px}
+.cq-total b{margin-left:auto;font-size:20px;color:var(--accent)}
+/* 품의서 목록 상태 색 (14 pmStCls) */
+/* 알약 모양: 표 공통 select(table.t select) 모양을 덮어씀 · 화살표는 작은 그림 */
+table.t select.pm-st{-webkit-appearance:none;appearance:none;width:auto;min-width:78px;min-height:0;height:26px;padding:0 22px 0 12px;border:1px solid transparent;border-radius:999px;box-shadow:none;
+  font-size:12px;font-weight:600;letter-spacing:-.2px;line-height:24px;text-align:center;text-align-last:center;cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%238a93a0'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center;background-size:8px 5px;transition:filter .12s}
+table.t select.pm-st:hover{filter:brightness(.96)}
+table.t select.pm-st:focus{outline:0;box-shadow:0 0 0 3px var(--accent-soft)}
+table.t select.pm-st.st-draft,table.t select.pm-st.st-draft:hover,table.t select.pm-st.st-draft:focus{background-color:#f1f3f6;color:#5b6472;border-color:#dfe3e8}
+table.t select.pm-st.st-wait,table.t select.pm-st.st-wait:hover,table.t select.pm-st.st-wait:focus{background-color:var(--warn-soft);color:var(--warn);border-color:var(--warn-line)}
+table.t select.pm-st.st-done,table.t select.pm-st.st-done:hover,table.t select.pm-st.st-done:focus{background-color:var(--ok-soft);color:var(--ok);border-color:#c6e7d4}
+table.t select.pm-st.st-etc,table.t select.pm-st.st-etc:hover,table.t select.pm-st.st-etc:focus{background-color:var(--bad-soft);color:var(--bad);border-color:#f0c4c4}
+table.t select.pm-st option{background:#fff;color:#222;font-weight:400;text-align:left}
+/* 품의서 대장: 표 머리글 틀고정 (위 막대 바로 아래에 붙음) */
+table.t.pm-list thead th{z-index:4}

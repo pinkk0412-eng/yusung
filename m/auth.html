@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>드롭박스 연결</title>
+<style>
+:root{--ink:#1d2430;--muted:#6b7684;--line:#e2e6ec;--bg:#f4f6f9;--accent:#2b59c3;--bad:#c03636;--ok:#177245}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;padding:24px 16px}
+.box{max-width:480px;margin:40px auto;background:#fff;border:1px solid var(--line);border-radius:14px;padding:22px}
+h1{font-size:19px;margin:0 0 10px}
+code{display:block;word-break:break-all;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;margin:10px 0;font-size:14px}
+button{min-height:44px;padding:0 18px;border-radius:10px;border:1px solid var(--accent);background:var(--accent);color:#fff;font-size:15px;font-weight:600;cursor:pointer}
+.muted{color:var(--muted);font-size:14px}
+</style>
+</head>
+<body>
+<div class="box" id="box">…</div>
+<script>
+/* 드롭박스 [허용] 뒤 돌아오는 곳 — 코드를 프로그램 창(opener 또는 같은 주소의 웹 프로그램)으로 보냄.
+   코드만으로는 연결할 수 없음 (프로그램 창이 가진 비밀 값 PKCE 가 있어야 함). */
+'use strict';
+const p = new URLSearchParams(location.search), code = p.get('code'), st = p.get('state') || '';
+const err = p.get('error_description') || p.get('error');
+const box = document.getElementById('box');
+const esc = v => String(v || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+history.replaceState(null, '', location.pathname);   // 주소창에서 코드 지우기
+if (code) {
+  const msg = { ysmAuth: code, state: st };
+  try { if (window.opener) window.opener.postMessage(msg, '*'); } catch (e) { }
+  try { new BroadcastChannel('ysm-auth').postMessage(msg); } catch (e) { }
+  box.innerHTML = `<h1>✔ 허용했습니다</h1><p>프로그램 창으로 돌아가세요. 잠시 뒤 자동으로 연결됩니다.</p>
+    <p class="muted">자동으로 연결되지 않으면 아래 <b>연결 코드</b>를 복사해 프로그램의 입력칸에 붙여 넣으세요.</p>
+    <code id="c">${esc(code)}</code><button type="button" id="cp">연결 코드 복사</button>`;
+  document.getElementById('cp').onclick = async () => { try { await navigator.clipboard.writeText(code); document.getElementById('cp').textContent = '복사했습니다'; } catch (e) { getSelection().selectAllChildren(document.getElementById('c')); } };
+  window.addEventListener('message', e => { if (e.data && e.data.ysmAuthOk) { box.innerHTML = '<h1>✔ 연결했습니다</h1><p>이 창은 닫아도 됩니다.</p>'; setTimeout(() => window.close(), 1200); } });
+} else {
+  box.innerHTML = `<h1>연결하지 못했습니다</h1><p>${esc(err || '드롭박스에서 허용하지 않았습니다.')}</p><p class="muted">프로그램에서 [드롭박스 연결]을 다시 눌러 주세요.</p>`;
+}
+</script>
+</body>
+</html>

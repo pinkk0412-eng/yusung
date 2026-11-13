@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>유성 현장 관리 프로그램</title>
+<link rel="stylesheet" href="style.css?v=2026.11.13-5">
+</head>
+<body>
+<header class="topbar no-print">
+  <div class="brand">유성 현장 관리 프로그램 <span id="appVer" class="ver"></span></div>
+  <label class="field-inline">현장
+    <select id="siteSelect"></select>
+  </label>
+  <label class="field-inline">작업월
+    <button class="btn ghost sm" id="prevMonth" title="이전 달">◀</button>
+    <input type="month" id="monthInput">
+    <button class="btn ghost sm" id="nextMonth" title="다음 달">▶</button>
+    <button class="btn ghost sm" id="todayMonth" title="이번 달 · 오늘로">오늘</button>
+  </label>
+  <span id="saveState" class="save-state"></span>
+  <button id="settingsTopBtn" class="btn sm secbtn" type="button" hidden>설정</button>
+</header>
+<nav class="tabs no-print" id="tabs" aria-label="주요 메뉴">
+  <div class="nav-group">
+    <button class="nav-item" data-tab="home"><span class="nav-copy"><b>업무 홈</b></span></button>
+    <button class="nav-item" data-tab="pumui"><span class="nav-copy"><b>품의서</b></span></button>
+  </div>
+  <div class="nav-group">
+    <button class="nav-item" data-tab="card"><span class="nav-copy"><b>법인카드</b></span></button>
+    <button class="nav-item" data-tab="cash"><span class="nav-copy"><b>전도금</b></span></button>
+    <button class="nav-item" data-tab="monthly"><span class="nav-copy"><b>월결제</b></span></button>
+  </div>
+  <div class="nav-group">
+    <button class="nav-item" data-tab="meal"><span class="nav-copy"><b>출근부</b></span></button>
+    <button class="nav-item" data-tab="cater"><span class="nav-copy"><b>식대·캐터링</b></span></button>
+    <button class="nav-item" data-tab="pay"><span class="nav-copy"><b>인건비</b></span></button>
+  </div>
+  <div class="nav-group">
+    <button class="nav-item" data-tab="budget"><span class="nav-copy"><b>예산·손익</b></span></button>
+    <button class="nav-item" data-tab="bill"><span class="nav-copy"><b>매출 청구</b></span></button>
+    <button class="nav-item" data-tab="asset"><span class="nav-copy"><b>자산·집기</b></span></button>
+  </div>
+  <div class="nav-group nav-bottom">
+    <button class="nav-item" data-tab="help"><span class="nav-copy"><b>사용설명서</b></span></button>
+  </div>
+</nav>
+<main id="view" class="no-print"></main>
+<div id="printArea"></div>
+<div id="modalRoot"></div>
+<input type="file" id="fileInput" hidden>
+<script src="lib/xlsx.full.min.js?v=2026.11.13-5"></script>
+<script src="lib/ocr/ocr.js?v=2026.11.13-5"></script>
+<script src="lib/pumui_template.js?v=2026.11.13-5"></script>
+<!-- 프로그램 본체: 순서대로 읽힘 (00_core = 계산·파싱, 01~17 = 화면별, 18_init = 시작) -->
+<script src="m/scan.js?v=2026.11.13-5"></script><!-- 스캔 편집 (휴대폰 앱과 같이 씀) -->
+<script src="js/00_core.js?v=2026.11.13-5"></script>
+<script src="js/01_data.js?v=2026.11.13-5"></script>
+<script src="js/02_receipt.js?v=2026.11.13-5"></script>
+<script src="js/03_ai.js?v=2026.11.13-5"></script>
+<script src="js/04_common.js?v=2026.11.13-5"></script>
+<script src="js/05_home.js?v=2026.11.13-5"></script>
+<script src="js/06_card.js?v=2026.11.13-5"></script>
+<script src="js/07_cash.js?v=2026.11.13-5"></script>
+<script src="js/08_meal.js?v=2026.11.13-5"></script>
+<script src="js/09_monthly.js?v=2026.11.13-5"></script>
+<script src="js/10_settings.js?v=2026.11.13-5"></script>
+<script src="js/10b_help.js?v=2026.11.13-5"></script>
+<script src="js/10c_mobile.js?v=2026.11.13-5"></script>
+<script src="js/11_pay.js?v=2026.11.13-5"></script>
+<script src="js/12_pl.js?v=2026.11.13-5"></script>
+<script src="js/12b_bill.js?v=2026.11.13-5"></script>
+<script src="js/12c_asset.js?v=2026.11.13-5"></script>
+<script src="js/13_docs.js?v=2026.11.13-5"></script>
+<script src="js/14_pumui.js?v=2026.11.13-5"></script>
+<script src="js/14b_orgpay.js?v=2026.11.13-5"></script>
+<script src="js/14c_budget.js?v=2026.11.13-5"></script>
+<script src="js/15_pumui_excel.js?v=2026.11.13-5"></script>
+<script src="js/16_export.js?v=2026.11.13-5"></script>
+<script src="js/17_actions.js?v=2026.11.13-5"></script>
+<script src="js/18_init.js?v=2026.11.13-5"></script>
+</body>
+</html>

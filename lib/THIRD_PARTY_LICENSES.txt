@@ -1,0 +1,16 @@
+이 프로그램에 함께 들어 있는 외부 공개 소프트웨어 (Third-party software)
+
+1) SheetJS Community Edition (xlsx.full.min.js)
+   Copyright (C) 2013-present SheetJS LLC
+   Apache License 2.0 — https://github.com/SheetJS/sheetjs/blob/master/LICENSE
+
+2) PDF.js (pdf/pdf.min.js, pdf/pdf.worker.min.js)
+   Copyright Mozilla Foundation
+   Apache License 2.0 — pdf/LICENSE-pdfjs.txt
+
+3) Tesseract.js / Tesseract OCR 한국어 학습 자료 (ocr/)
+   Apache License 2.0 — ocr/LICENSE-tesseract.txt
+
+Apache License 2.0 전문: https://www.apache.org/licenses/LICENSE-2.0
+
+회사 로고(yusung_logo.jpg)와 회사 양식은 ㈜유성의 것이며 위 공개 라이선스에 포함되지 않습니다.
