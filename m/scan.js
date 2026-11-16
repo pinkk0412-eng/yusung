@@ -181,12 +181,18 @@ const Scan = (() => {
       for (let t = Math.max(20, t1 - 24); t < 248; t += 8) ts.add(t);
       for (const t of ts) { if (t < 0) continue; const r = comp(F, t); if (r && r.ratio >= 0.05 && r.ratio <= 0.97 && convexOk(r.q) && r.q.every(([x, y]) => x > -4 && y > -4 && x < w + 4 && y < h + 4)) cands.push(r); }   // 모서리가 사진 밖으로 나가면 빼기
     }
-    if (!cands.length) return full(c);
     cands.forEach(r => { r.sup = support(r.q); r.score = r.fill * (0.2 + 0.8 * r.sup) * (0.8 + 0.2 * Math.min(1, r.ratio / 0.25)) - r.edge * 1.5; });
     cands.sort((a, b) => b.score - a.score);
-    const best = cands[0];
-    if (best.score < 0.3) return full(c);
-    best.q = fixSides(best.q);
+    // 밝기로 찾은 것(위 6개) + 경계 직선으로 찾은 것(긴 변 640 그림) → 같은 잣대(quadScore)로 고름
+    // (연회색·흰 책상처럼 밝기로는 종이가 안 나뉠 때는 직선 쪽이 맞음)
+    const s2 = scaled(c, 640), w2 = s2.width, h2 = s2.height, f2 = w2 / w, G2 = grayOf(s2), E = edgeMap(G2, w2, h2, 6); E.L = G2;
+    const pool = cands.slice(0, 6).filter(r => r.score >= 0.3).map(r => ({ q: r.q.map(([x, y]) => [x * f2, y * f2]), src: 'region' }));
+    houghQuads(E, w2, h2).forEach(q => pool.push({ q, src: 'line' }));
+    pool.forEach(p => { p.score = quadScore(p.q, E, w2, h2); });
+    pool.sort((a, b) => b.score - a.score);
+    if (!pool.length || pool[0].score < 0.45) return full(c);
+    const best = { q: pool[0].q.map(([x, y]) => [x / f2, y / f2]) };
+    if (pool[0].src === 'region') best.q = fixSides(best.q);
     // 직사각형과 너무 다르면(한 모서리가 20° 넘게 틀어짐 = 말리거나 그림자 진 모서리를 잘라 먹은 것) 감싸는 직사각형으로 — 글자를 잘라 먹는 것보다 책상이 조금 남는 게 나음
     if (maxSkew(best.q) > 20) { const r = minRect(best.q); if (r) best.q = orderQuad(r).map(([x, y]) => [Math.min(w, Math.max(0, x)), Math.min(h, Math.max(0, y))]); }
     // 4) 큰 그림(긴 변 1200)에서 네 변을 실제 경계선에 붙임
@@ -197,6 +203,116 @@ const Scan = (() => {
     return q.map(([x, y]) => [Math.min(c.width, Math.max(0, x * kb)), Math.min(c.height, Math.max(0, y * kb))]);
   }
   function boxBlur(A, w, h) { const o = new Float32Array(A.length); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { let v = 0, n = 0; for (let dy = -1; dy <= 1; dy++) { const yy = y + dy; if (yy < 0 || yy >= h) continue; for (let dx = -1; dx <= 1; dx++) { const xx = x + dx; if (xx < 0 || xx >= w) continue; v += A[yy * w + xx]; n++; } } o[y * w + x] = v / n; } return o; }
+  /* 직선으로 찾기 (흰 책상 위 흰 영수증처럼 밝기로는 안 나뉠 때): 가는 경계선 → 허프 변환으로 직선들 → 거의 평행한 두 쌍으로 사각형 */
+  function edgeMap(Lb, w, h, thr = 5) {   // 경계 세기·방향 + 가늘게 (경계 방향으로 이웃보다 센 점만)
+    const mag = new Float32Array(w * h), ang = new Float32Array(w * h), on = new Uint8Array(w * h);
+    for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x, A = Lb;
+      const gx = A[i - w + 1] + 2 * A[i + 1] + A[i + w + 1] - A[i - w - 1] - 2 * A[i - 1] - A[i + w - 1];
+      const gy = A[i + w - 1] + 2 * A[i + w] + A[i + w + 1] - A[i - w - 1] - 2 * A[i - w] - A[i - w + 1];
+      mag[i] = Math.hypot(gx, gy) / 4; ang[i] = Math.atan2(gy, gx);
+    }
+    for (let y = 2; y < h - 2; y++) for (let x = 2; x < w - 2; x++) {
+      const i = y * w + x, m = mag[i]; if (m < thr) continue;
+      const dx = Math.round(Math.cos(ang[i])), dy = Math.round(Math.sin(ang[i])), j = i + dy * w + dx, k2 = i - dy * w - dx;
+      if (m >= mag[j] && m >= mag[k2]) on[i] = 1;
+    }
+    return { on, ang, mag };
+  }
+  function houghLines(E, w, h) {
+    const D = Math.ceil(Math.hypot(w, h)), R = 2 * D + 1, NT = 180, acc = new Float32Array(NT * R), cs = [], sn = [];
+    for (let t = 0; t < NT; t++) { cs.push(Math.cos(t * Math.PI / 180)); sn.push(Math.sin(t * Math.PI / 180)); }
+    for (let y = 2; y < h - 2; y++) for (let x = 2; x < w - 2; x++) {
+      const i = y * w + x; if (!E.on[i]) continue;
+      const tg = Math.round(E.ang[i] * 180 / Math.PI);
+      for (let d = -4; d <= 4; d++) { const t = (((tg + d) % 180) + 180) % 180; acc[t * R + Math.round(x * cs[t] + y * sn[t]) + D] += 1; }   // 방향 t(0~179°)의 직선 x·cos t + y·sin t = r
+    }
+    const lines = [], minV = Math.max(15, 0.05 * Math.min(w, h));
+    for (let n = 0; n < 36; n++) {
+      let bi = 0, bv = 0; for (let i = 0; i < acc.length; i++) if (acc[i] > bv) { bv = acc[i]; bi = i; }
+      if (bv < minV) break;
+      const t = (bi / R) | 0, r = (bi % R) - D; lines.push({ t, r, v: bv, c: cs[t], s: sn[t] });
+      for (let dt = -4; dt <= 4; dt++) { let t2 = t + dt, rr = r; if (t2 < 0) { t2 += 180; rr = -r; } else if (t2 >= 180) { t2 -= 180; rr = -r; } for (let dr = -8; dr <= 8; dr++) { const ri = rr + dr + D; if (ri >= 0 && ri < R) acc[t2 * R + ri] = 0; } }
+    }
+    return lines;
+  }
+  function houghQuads(E, w, h) {
+    const L = houghLines(E, w, h), out = [], gap = 0.1 * Math.min(w, h);
+    const adiff = (a, b) => { const d = Math.abs(a - b) % 180; return Math.min(d, 180 - d); };
+    const X = (a, b) => { const det = a.c * b.s - a.s * b.c; if (Math.abs(det) < 1e-6) return null; return [(a.r * b.s - a.s * b.r) / det, (a.c * b.r - a.r * b.c) / det]; };
+    const pairs = [];
+    for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) {
+      if (adiff(L[i].t, L[j].t) > 20) continue;   // 원근·접힌 모서리로 20°까지 어긋남
+      const rj = adiff(L[i].t, L[j].t) === Math.abs(L[i].t - L[j].t) % 180 && Math.abs(L[i].t - L[j].t) < 90 ? L[j].r : -L[j].r;
+      if (Math.abs(L[i].r - rj) < gap) continue;
+      pairs.push([L[i], L[j]]);
+    }
+    // 평행한 두 변(좌우)을 찾았으면, 그 사이 띠 안에서만 가로지르는 직선(위·아래 변)을 다시 찾음 — 흰 책상 위 흰 영수증의 흐린 위·아래 끝
+    pairs.sort((p, q) => (q[0].v + q[1].v) - (p[0].v + p[1].v));
+    for (const [a1, a2] of pairs.slice(0, 6)) {
+      const cr = crossLines(E, w, h, a1, a2);
+      for (let i = 0; i < cr.length; i++) for (let j = i + 1; j < cr.length; j++) {
+        if (adiff(cr[i].t, cr[j].t) > 20 || Math.abs(cr[i].r - (Math.abs(cr[i].t - cr[j].t) < 90 ? cr[j].r : -cr[j].r)) < gap) continue;
+        const pts = [X(a1, cr[i]), X(a1, cr[j]), X(a2, cr[j]), X(a2, cr[i])]; if (pts.some(v => !v)) continue;
+        if (!pts.every(([x, y]) => x > -0.02 * w && y > -0.02 * h && x < 1.02 * w && y < 1.02 * h)) continue;
+        const qd = orderQuad(pts); if (convexOk(qd)) out.push(qd);
+      }
+    }
+    for (let p = 0; p < pairs.length; p++) for (let q = p + 1; q < pairs.length; q++) {
+      const [a1, a2] = pairs[p], [b1, b2] = pairs[q], ang = adiff(a1.t, b1.t); if (ang < 50) continue;
+      const pts = [X(a1, b1), X(a1, b2), X(a2, b2), X(a2, b1)]; if (pts.some(v => !v)) continue;
+      if (!pts.every(([x, y]) => x > -0.02 * w && y > -0.02 * h && x < 1.02 * w && y < 1.02 * h)) continue;
+      const qd = orderQuad(pts); if (convexOk(qd)) out.push(qd);
+    }
+    return out;
+  }
+  function crossLines(E, w, h, a1, a2) {
+    const r2 = Math.abs(a1.t - a2.t) < 90 ? a2.r : -a2.r, lo = Math.min(a1.r, r2) + 2, hi = Math.max(a1.r, r2) - 2; if (hi - lo < 10) return [];
+    const T0 = a1.t + 90, NA = 51, D = Math.ceil(Math.hypot(w, h)), R = 2 * D + 1, acc = new Float32Array(NA * R), cs = [], sn = [], tt = [];
+    for (let k = 0; k < NA; k++) { const t = (((T0 - 25 + k) % 180) + 180) % 180; tt.push(t); cs.push(Math.cos(t * Math.PI / 180)); sn.push(Math.sin(t * Math.PI / 180)); }
+    for (let y = 2; y < h - 2; y++) for (let x = 2; x < w - 2; x++) {
+      const i = y * w + x; if (!E.on[i]) continue;
+      const p = x * a1.c + y * a1.s; if (p < lo || p > hi) continue;
+      const tg = (((Math.round(E.ang[i] * 180 / Math.PI)) % 180) + 180) % 180;
+      for (let k = 0; k < NA; k++) { const d = Math.abs(tt[k] - tg) % 180; if (Math.min(d, 180 - d) > 5) continue; acc[k * R + Math.round(x * cs[k] + y * sn[k]) + D] += 1; }
+    }
+    const out = [], minV = 0.2 * (hi - lo);
+    for (let n = 0; n < 10; n++) {
+      let bi = 0, bv = 0; for (let i = 0; i < acc.length; i++) if (acc[i] > bv) { bv = acc[i]; bi = i; }
+      if (bv < minV) break;
+      const k = (bi / R) | 0, r = (bi % R) - D; out.push({ t: tt[k], r, v: bv, c: cs[k], s: sn[k] });
+      for (let dk = -4; dk <= 4; dk++) { const k2 = k + dk; if (k2 < 0 || k2 >= NA) continue; for (let dr = -6; dr <= 6; dr++) { const ri = r + dr + D; if (ri >= 0 && ri < R) acc[k2 * R + ri] = 0; } }
+    }
+    return out;
+  }
+  // 사각형 점수 (변마다): 경계선이 변을 따라 이어지는지(cov) + 안쪽(종이)이 바깥(책상)보다 밝은지(step — 영수증 안 점선·글자 줄은 양쪽이 다 종이라 0)
+  //  → 가장 약한 변도 봄 + 바깥 바로 옆이 어지러우면 감점 + 클수록 조금 가점
+  function quadScore(q, E, w, h) {
+    let ar = 0; for (let i = 0; i < 4; i++) { const [x1, y1] = q[i], [x2, y2] = q[(i + 1) % 4]; ar += x1 * y2 - x2 * y1; }
+    const ratio = Math.abs(ar) / 2 / (w * h); if (ratio < 0.04 || ratio > 0.97) return -1;
+    const L = E.L, at = (x, y) => L[Math.min(h - 1, Math.max(0, Math.round(y))) * w + Math.min(w - 1, Math.max(0, Math.round(x)))];
+    const sides = [], cl = [], covs = [], steps = [];
+    for (let e = 0; e < 4; e++) {
+      const a = q[e], b = q[(e + 1) % 4], len = Math.hypot(b[0] - a[0], b[1] - a[1]); if (len < 5) return -1;
+      const ux = (b[0] - a[0]) / len, uy = (b[1] - a[1]) / len, nx = -uy, ny = ux, phi = Math.atan2(ny, nx);
+      let hit = 0, n = 0, border = 0, c1 = 0, c2 = 0, st = 0;
+      for (let t = 0.04; t < 0.97; t += 0.02) {
+        const px = a[0] + (b[0] - a[0]) * t, py = a[1] + (b[1] - a[1]) * t;
+        if (px < 3 || py < 3 || px > w - 4 || py > h - 4) { border++; continue; }
+        n++;
+        for (let o = -3; o <= 3; o++) { const i = Math.round(py + ny * o) * w + Math.round(px + nx * o); if (E.on[i] && Math.abs(Math.cos(E.ang[i] - phi)) > 0.85) { hit++; break; } }
+        for (const o of [5, 9, 13]) { const xx = Math.round(px - nx * o), yy = Math.round(py - ny * o); if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue; c2++; if (E.on[yy * w + xx]) c1++; }
+        let din = 0, dout = 0; for (const o of [4, 7, 10]) { din += at(px + nx * o, py + ny * o); dout += at(px - nx * o, py - ny * o); }
+        st += Math.min(1, Math.max(0, (din - dout) / 3 / 15));
+      }
+      const onBorder = n < 0.3 * (n + border), cov = onBorder ? 0.6 : hit / Math.max(1, n), step = onBorder ? 0.6 : st / Math.max(1, n);
+      covs.push(cov); steps.push(step); sides.push(0.5 * cov + 0.5 * step); cl.push(c2 ? c1 / c2 : 0);
+    }
+    const mean = sides.reduce((s, v) => s + v, 0) / 4, mn = Math.min(...sides), clut = cl.reduce((s, v) => s + v, 0) / 4;
+    const K = [0.5, 0.5, 0.6, 0.6];
+    return K[0] * mean + K[1] * mn - K[2] * clut + K[3] * Math.sqrt(ratio);
+  }
+
   // 조명 고르게: 밝기 ÷ 넓게 흐린 밝기 (그림자 속 종이도 주변보다 밝으면 밝게)
   function flatLight(L, w, h) {
     const sw = Math.max(2, Math.round(w / 20)), sh = Math.max(2, Math.round(h / 20)), sm = new Float32Array(sw * sh), cnt = new Float32Array(sw * sh);

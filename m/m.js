@@ -4,7 +4,7 @@
  * 사진은 회사 드롭박스의 앱 전용 폴더 /inbox 로 올라감: 사진(.jpg) + 같은 이름의 정보(.json).
  * 신호가 없으면 휴대폰에 모아 두었다가 앱을 다시 열거나 인터넷이 연결되면 다시 보냄. */
 'use strict';
-const M_VER = '2026.11.13-7';
+const M_VER = '2026.11.16-1';
 const $ = (s, r = document) => r.querySelector(s);
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pad2 = n => String(n).padStart(2, '0');
