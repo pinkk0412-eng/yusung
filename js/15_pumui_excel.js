@@ -569,6 +569,20 @@ function pmVatRecalc(rows, edited) {   // rows 를 그 자리에서 고침 · ed
     hr[j] = fmt(supply + vat);
   });
 }
+/* 작성 창 "부가세 줄 자동": 켜면 표 끝에 계 · 부가세 · 합계 줄 (금액 열마다 계산, 이후 칸을 고치면 pmVatRecalc 로 다시) · 끄면 그 세 줄을 뺌 */
+function pmVatRows(t, on) {
+  const rows = t.rows || (t.rows = []), lab = r => pmRowLab(r);
+  if (!on) { t.rows = rows.filter(r => !/^(계|소계|공급가|공급가액|부가세|부가가치세|VAT|합계|총계)$/i.test(lab(r))); if (!t.rows.length) t.rows.push(t.cols.map(() => '')); return; }
+  if (pmVatAuto(rows)) return;
+  const amtCols = t.cols.map((c, j) => j > 0 && /금액|합계|청구|요금|금회|\d+월|\d+차/.test(String(c)) && !/단가|수량|단위|누계/.test(String(c)) ? j : -1).filter(j => j > 0);
+  const items = rows.filter(r => !PM_TOT_LAB.test(lab(r)));   // 빈 줄(아직 안 쓴 줄)도 그대로 둠
+  const mk = l => t.cols.map((c, j) => (j === 0 ? l : ''));
+  const gr = rows.find(r => /^(계|소계|공급가|공급가액)$/.test(lab(r))) || mk('계');
+  amtCols.forEach(j => { gr[j] = fmt(sum(items, r => toNum(r[j]))); });   // 0 이어도 '0' 을 넣어 두어야 pmVatRecalc 가 그 열을 계산
+  t.rows = [...items, gr, mk('부가세'), mk('합계')];
+  pmVatRecalc(t.rows);
+  t.sum = false;   // 합계 줄이 따로 있으니 자동 합계(맨 아래 회색 줄)는 끔
+}
 function pmVatToggle(t, r) {   // 오른쪽 클릭 "이 줄 부가세 없음" — 비고 칸에 적음 (인쇄에도 보임) · 다시 누르면 지움
   const row = t.rows[r];
   if (pmNoVat(row)) { t.rows[r] = row.map(v => String(v ?? '').replace(new RegExp(`\\s*[·,/]?\\s*(${PM_NOVAT.source})`, 'gi'), '').trim()); return; }
@@ -622,6 +636,7 @@ function pmEditor(item, warns = []) {
     if (b.type === 'text') main = pdEd(i, 'text', lead ? '첫 줄은 굵게 제목처럼 인쇄됩니다. Enter 로 다음 줄 · Tab 으로 들여쓰기 (가. 나. 다. ※ …)' : '내용 (Tab 으로 들여쓰기)', pdLines(String(b.text || '').replace(/\n+$/, ''), true).replace(/^<div><br><\/div>$/, ''), lead ? ' lead' : '');
     if (b.type === 'table') main = `${pdEd(i, 'unit', '표 위 오른쪽 글 (예: (단위: 원 / VAT 포함))', esc(b.unit || ''))}${pdTable(b, i)}${pdEd(i, 'note', '표 아래 메모 (없으면 비워 두기)', b.note ? pdLines(b.note) : '')}
         <div class="pd-tools"><label><input type="checkbox" data-b="${i}" data-f="sum" ${b.sum ? 'checked' : ''}> 합계 줄 자동</label>
+          <label title="표 아래에 계(공급가) · 부가세(10%, 원 미만 버림) · 합계 줄을 넣고 금액을 고치면 다시 계산 · 면세 줄은 오른쪽 클릭 → '이 줄 부가세 없음'"><input type="checkbox" data-bvat="${i}" ${pmVatAuto(b.rows || []) ? 'checked' : ''}> 부가세 줄 자동</label>
           ${(b.merge || []).length || pmAutoMerge(b).length ? `<label title="구분·품명처럼 왼쪽 글 열의 빈 칸을 인쇄할 때 위 칸과 합침 (엑셀에서 합친 칸)"><input type="checkbox" data-bmerge="${i}" ${(b.merge || []).length ? 'checked' : ''}> 빈 칸은 위 칸과 합치기 (인쇄)</label>` : ''}
           ${pmCmpVendors(b).length ? `<button class="btn ghost sm" data-bgrpadd="${i}">+ 비교 업체</button>` : ''}
           ${b.cols.some(c => /수량/.test(c)) && !/판매내역/.test(b.title || '') ? `<button class="btn ghost sm" data-basset="${i}" title="이 표의 품목을 자산·집기 대장에 등록">📦 자산 대장에 등록</button>` : ''}
@@ -748,6 +763,7 @@ function pmEditor(item, warns = []) {
     q('[data-pdbold]').forEach(b => { b.onmousedown = ev => ev.preventDefault(); b.onclick = () => document.execCommand('bold'); });
     q('.pd-tools [data-f="sum"], .pd-tools [data-f="width"]').forEach(el => el.onchange = op(() => { }));
     q('[data-bmerge]').forEach(el => el.onchange = op(() => { const b = B[+el.dataset.bmerge]; if (el.checked) b.merge = pmAutoMerge(b); else delete b.merge; }));
+    q('[data-bvat]').forEach(el => el.onchange = op(() => pmVatRows(B[+el.dataset.bvat], el.checked)));
     q('[data-blvl]').forEach(el => el.onchange = op(() => { const b = B[+el.dataset.blvl]; b.num = el.value === 'num'; b.sub = el.value === 'sub'; if (!b.sub) delete b.sub; }));
     q('[data-battrm]').forEach(b => b.onclick = op(() => B[+b.dataset.battrm].items.splice(+b.dataset.k, 1)));
     // 표 칸: 엑셀에서 복사한 표 → 그 칸부터 채움 (행·열 자동 추가) · 그냥 글은 서식 없이
@@ -818,7 +834,10 @@ function pmEditor(item, warns = []) {
     ev.preventDefault();
     if (ev.key === 'Enter' && ev.shiftKey && td.tagName === 'TD') { document.execCommand('insertLineBreak'); return; }   // Shift+Enter = 칸 안 줄바꿈 (엑셀 Alt+Enter)
     const cells = [...td.closest('table').querySelectorAll('[contenteditable="true"]')], k = cells.indexOf(td), i = +td.dataset.db;
-    const addRow = col => { readBlocks(root); const t = B[i]; t.rows.push(t.cols.map(() => '')); redraw(); pdFocus(root.querySelector(`td[data-db="${i}"][data-r="${t.rows.length - 1}"][data-c="${col}"]`)); };
+    const addRow = col => {   // 새 줄 — 계·부가세·합계 줄이 있으면 그 위에
+      readBlocks(root); const t = B[i], k = pmVatAuto(t.rows) ? t.rows.findIndex(r => PM_TOT_LAB.test(pmRowLab(r))) : -1, at = k >= 0 ? k : t.rows.length;
+      t.rows.splice(at, 0, t.cols.map(() => '')); redraw(); pdFocus(root.querySelector(`td[data-db="${i}"][data-r="${at}"][data-c="${col}"]`));
+    };
     if (ev.key === 'Enter') {
       if (td.tagName !== 'TD') { pdFocus(cells.find(c => c.tagName === 'TD')); return; }
       const nx = td.closest('tr').nextElementSibling;
@@ -969,6 +988,8 @@ const PM_AI_GUIDE = `당신은 분양대행사 (주)유성 현장의 경리 담�
 
 [반드시]
 - 서로 다른 업체의 견적서가 2개 이상이면 세부내역 표는 꼭 비교견적 모양(업체별 단가·금액 열 + 확정 업체 열). 견적서마다 품목이 조금 달라도 같은 품목끼리 한 줄에 맞추고 없는 칸은 "-".
+- 비교견적의 앞쪽 업체 열에는 확정 업체를 포함한 모든 견적 업체가 들어가고, 맨 끝 "확정(업체)" 열에 확정 업체 값이 한 번 더 들어감 (예: A|단가 A|금액 B|단가 B|금액 확정(A)|단가 확정(A)|금액).
+- 업체명(vendor·비교견적 머리글·첨부서류 괄호 안)은 견적서 안에 적힌 상호(공급자·회사명·도장·사업자등록증 이름)로. 파일 이름(예: abc20261019.pdf, scan_001)은 업체명이 아님 — 서류에서 상호를 못 찾으면 "업체A"·"업체B"로 쓰고 warnings 에 적음.
 - 금액·수량·날짜·업체명·소재지·이름은 메모나 첨부 서류에 있는 것만. 없으면 ○○ 또는 빈칸 — 절대 지어내지 않음.
 - 메모에 없는 칸은 "지금 내용"이 있으면 살리고, 없으면 "".
 - attachments: 첨부한 파일 순서대로 각 서류 이름 (예: 견적서(○○상사), 임대차계약서). 파일이 없으면 [].
@@ -986,7 +1007,7 @@ function pmAiPrompt(it, memo, files, examples) {
   // 요금 절약: 새 품의(양식 기본값뿐)는 "지금 내용"을 보내지 않음, 다시 쓰기는 사람이 고친 칸만 짧게
   const now = it.aiPickTpl ? null : Object.fromEntries(Object.entries({ 양식: tp ? tp.label : '', 제목: it.title, 업체명: it.vendor, 시행기간: it.period, 결제방법: it.payMethod, 결제일: it.payDate, 본문: tx && tx.text, 표: tb && (tb.rows || []).some(r => r.some(v => String(v ?? '').trim())) ? { 열: tb.cols, 줄: tb.rows.filter(r => r.some(v => String(v ?? '').trim())) } : null }).filter(([, v]) => v && String(v).trim()));
   return `현장명: ${S}${it.aiPickTpl ? '\n양식 고르기: 예' : ''}
-${files.length ? `첨부 파일: ${files.map((f, i) => `${i + 1}. ${f.name}`).join(' / ')}\n` : ''}${files.length >= 2 ? `※ 서류가 ${files.length}개입니다. 서로 다른 업체의 견적서가 2개 이상이면 세부내역 표를 비교견적(업체별 "업체|단가"·"업체|금액" 열 + "확정(업체)|단가"·"확정(업체)|금액" 열)으로 쓰고, 표 아래에 "※ 업체 선정 사유 : …".\n` : ''}
+${files.length ? `첨부 파일: ${files.map((f, i) => `${i + 1}. ${f.name}`).join(' / ')} (파일 이름은 업체명이 아님 — 업체명은 서류 안의 상호)\n` : ''}${files.length >= 2 ? `※ 서류가 ${files.length}개입니다. 서로 다른 업체의 견적서가 2개 이상이면 세부내역 표를 비교견적(업체별 "업체|단가"·"업체|금액" 열 + "확정(업체)|단가"·"확정(업체)|금액" 열)으로 쓰고, 표 아래에 "※ 업체 선정 사유 : …".\n` : ''}
 [메모]
 ${memo || '(메모 없음 — 첨부 서류만 보고 작성)'}
 ${now && Object.keys(now).length ? `\n[지금 내용]\n${JSON.stringify(now)}\n` : ''}${examples.length ? `\n[이 현장 지난 품의서 — 말투 본보기]\n${JSON.stringify(examples)}\n` : ''}`;
@@ -1036,10 +1057,26 @@ function pmAiDialog(it, onDone) {
       const ws = (out.warnings || []).map(w => String(w).trim()).filter(Boolean);
       const quotes = (out.attachments || []).filter(a => /견적/.test(a) && !/비교견적/.test(a)).length, tb = pmBlocks(it).find(b => b.type === 'table' && b.title !== '신규업체 등록사항');
       if (quotes >= 2 && tb && !pmCmpVendors(tb).length) ws.unshift(`견적서가 ${quotes}개인데 세부내역 표가 비교견적 모양(업체별 단가·금액 + 확정 업체)이 아닙니다 — 표를 고치거나 메모에 "비교견적으로" 적고 [✨ AI로 다시 쓰기]`);   // AI 가 비교견적을 빠뜨린 경우
+      // 업체 이름 자리에 파일 이름(ley20261019 같은 글자+숫자)이 들어간 경우 → 알림 (상호는 사람이 확인)
+      const fbase = files.map(f => f.name.replace(/\.[^.]+$/, '').replace(/\s/g, '').toLowerCase()), fileLike = n => { const k = String(n || '').replace(/^확정\s*\(?|\)$/g, '').replace(/\s/g, ''); return k && (fbase.includes(k.toLowerCase()) || /^[A-Za-z_\-]*\d{6,}/.test(k) || /^(scan|img|image|kakaotalk|photo|document)[_\-\d]/i.test(k)); };
+      const bad = [...new Set([...(tb ? pmCmpVendors(tb) : []), it.vendor].filter(fileLike))];
+      if (bad.length) ws.unshift(`업체명이 파일 이름처럼 보입니다 (${bad.join(', ')}) — 견적서의 상호로 고치세요 (표의 업체 이름 칸·업체명 칸)`);
       onDone(ws);
       toast(`AI 초안을 넣었습니다${n ? ` · 서류 ${n}개를 첨부서류에 등록` : ''}. 결재 올리기 전에 내용을 직접 확인해 주세요.`);
     } catch (e) { toast('AI 초안을 만들지 못했습니다: ' + e.message); go.disabled = false; go.textContent = '초안 만들기'; }
   };
+}
+/* 비교견적 표: 확정 업체도 앞쪽 비교 업체 열에 있어야 함 (회사 샘플: 영종컨테이너 | 한마음 | 더원 | 확정(영종컨테이너))
+   AI 가 확정 열에만 넣었으면 → 확정 열과 같은 값으로 비교 업체 열을 맨 앞에 넣음 */
+function pmCmpFixPick(tb) {
+  const gs = pmCmpVendors(tb), fixG = gs.find(g => /^확정/.test(g)); if (!fixG) return false;
+  const name = ((fixG.match(/^확정\s*\((.+)\)\s*$/) || [])[1] || '').trim(), key = s => String(s).replace(/\s|\(주\)|㈜|주식회사/g, '');
+  if (!name || /^업체명$/.test(name) || gs.some(g => g !== fixG && key(g) === key(name))) return false;
+  const fj = tb.cols.map((c, j) => [String(c), j]).filter(([c]) => c.startsWith(fixG + '|')).map(([, j]) => j);
+  const at = tb.cols.findIndex(c => String(c).includes('|'));
+  tb.cols.splice(at, 0, ...fj.map(j => `${name}|${String(tb.cols[j]).split('|')[1]}`));
+  tb.rows.forEach(r => { const vals = fj.map(j => r[j] ?? ''); r.splice(at, 0, ...vals); });
+  return true;
 }
 async function pmAiApply(it, out, files) {   // AI 결과 → it (블록 배열은 그대로 두고 안을 고침 — 작성 창이 같은 배열을 씀)
   const B = it.blocks, str = v => String(v ?? '').trim();
@@ -1054,6 +1091,7 @@ async function pmAiApply(it, out, files) {   // AI 결과 → it (블록 배열�
     tb.rows = (t.rows || []).map(r => cols.map((c, j) => str((r || [])[j]))).filter(r => r.some(Boolean)).filter(r => !/^(계|소계|합계|합\s*계|총계)$/.test(r[0]));
     if (!tb.rows.length) tb.rows.push(cols.map(() => ''));
     tb.sum = true; tb.unit = str(t.unit) || PM_UNIT_DEF; if (str(t.note)) tb.note = str(t.note);
+    pmCmpFixPick(tb);
   }
   if (!files.length || !FS.ready) return 0;
   let at = B.find(b => b.type === 'attach');
