@@ -46,12 +46,20 @@ function render() {
 function gateView() {
   const api = !!window.showDirectoryPicker;
   let old = null; try { old = JSON.parse(localStorage.getItem(STORE_KEY)); } catch (e) { }
+  // 전에 연 폴더가 있음 = 새로고침·다시 열기 → 브라우저가 폴더 권한을 한 번 다시 물음 (프로그램이 대신 누를 수 없음). 아무 곳이나 눌러도 열림 (18 init)
+  if (api && state.savedRootName) return `<div class="panel gate-reopen" style="max-width:620px;margin:60px auto;text-align:center">
+      <h2 style="margin-top:0">이어서 열기</h2>
+      <p>브라우저가 보안을 위해 <b>새로고침·다시 열 때마다 폴더 사용 권한</b>을 한 번 더 묻습니다.<br>아래 버튼(또는 화면 아무 곳)을 누르고 <b>[허용]</b>하면 보던 화면으로 돌아갑니다.</p>
+      <button class="btn primary" data-act="fsReopen" style="font-size:16px;padding:10px 22px">📁 "${esc(state.savedRootName)}" 폴더 열기</button>
+      <p class="muted small" style="margin-top:14px">권한 창에 <b>"방문할 때마다 허용"</b>이 보이면 그것을 고르세요 — 다음부터는 새로고침해도 바로 열립니다 (웹 주소로 열 때).</p>
+      <p class="small"><button class="lnk" data-act="fsPick">다른 데이터 폴더 선택…</button></p>
+    </div>`;
   return `<div class="panel" style="max-width:760px;margin:30px auto">
       <h2>데이터 폴더 연결</h2>
       <p>이 프로그램은 자료를 <b>PC의 폴더에 파일로</b> 저장합니다. <b>회사가 만들어 둔 현장 폴더</b>를 골라 연결하면, 월별 자료와 영수증 사진이 그 폴더 안에 보관됩니다.</p>
       <pre class="small" style="background:#f7f8fa;border:1px solid var(--line);border-radius:6px;padding:10px;overflow-x:auto">📁 데이터 폴더 = 현장 폴더들이 들어 있는 폴더 (예: Dropbox)
  ├ 공통설정.txt
- ├ 📁 132. 수지 자이 에디시온    (회사가 만든 현장 폴더 → 프로그램에서 연결)
+ ├ 📁 ○○○. ○○ 현장           (회사가 만든 현장 폴더 → 프로그램에서 연결)
  │  ├ 현장설정.txt               현장정보·결재라인·카드·직원·거래처
  │  ├ 📁 A. 기안품의             C. 작성완료(엑셀) · A. 결재완료 · B. 스캔본
  │  ├ 📁 B. 자금관련
@@ -59,6 +67,7 @@ function gateView() {
  │  │  └ 📁 A~F. … 스캔         법인카드 사용내역서(20만원 이상)·법인카드 정산·선결제·월결제·인건비·전도금 정산
  │  ├ 📁 C. 근무이행각서  📁 D. 기타(휴가계 등)
  └ 📁 다른 현장 …</pre>
+      ${api && state.rootLost ? `<div class="banner warn small">전에 <b>📁 ${esc(state.rootLost.name)}</b> 폴더를 열었는데 브라우저가 기억하지 못했습니다 — 이유: ${esc(state.rootLost.why)}<br>아래 [데이터 폴더 선택…]에서 같은 폴더를 다시 고르세요. 계속 이러면 이 화면을 캡처해서 보내 주세요.</div>` : ''}
       ${api ? `<div class="row">${state.savedRootName ? `<button class="btn primary" data-act="fsReopen">📁 "${esc(state.savedRootName)}" 폴더 열기</button>` : ''}
         <button class="btn ${state.savedRootName ? '' : 'primary'}" data-act="fsPick">데이터 폴더 선택…</button></div>
         <p class="muted small">현장 폴더들이 들어 있는 폴더(예: <b>Dropbox</b>)를 고르세요. "파일 수정 허용"을 물으면 <b>허용</b>.</p>

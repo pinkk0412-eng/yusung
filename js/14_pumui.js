@@ -72,7 +72,7 @@ const PM_TPL = [
 ];
 ['vendor', 'setup', 'kt', 'crm', 'sms', 'fuel', 'cater', 'rent'].forEach(id => { const t = PM_TPL.find(x => x.id === id); if (t) t.compare = true; });   // 업체 섭외 = 비교견적 3곳 (경영지원 요청)
 ['rent', 'rate'].forEach(id => { const t = PM_TPL.find(x => x.id === id); if (t) t.hidden = true; });   // 새 품의 목록에서 숨김 — rent 는 에메트 견적서로 작성(15 pmEmetNew), rate 는 채용 창에서 "직종별" 선택으로 씀
-// 지출결의서 없이 올리는 양식 (영종 샘플: 채용·단가 = 인건비로, 업체 섭외·집기 임차 = 월결제로, 오픈기간 카드 = 법인카드로 지급) → "지출결의서 같이 올림" 기본 꺼짐 (켜 두면 손익에도 두 번 잡힘)
+// 지출결의서 없이 올리는 양식 (회사 샘플: 채용·단가 = 인건비로, 업체 섭외·집기 임차 = 월결제로, 오픈기간 카드 = 법인카드로 지급) → "지출결의서 같이 올림" 기본 꺼짐 (켜 두면 손익에도 두 번 잡힘)
 ['hire', 'rate', 'vendor', 'rent', 'opencard'].forEach(id => { const t = PM_TPL.find(x => x.id === id); if (t) t.noExp = true; });
 const pmTpl = id => PM_TPL.find(x => x.id === id);
 // 오픈기간 법인카드 품의 ↔ 법인카드 사용내역 (사용기간·카드 기준, 카드 화면 비교와 같은 범위)

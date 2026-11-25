@@ -491,7 +491,7 @@ function pmExpGroups(it) {
   const tbs = pmBlocks(it).filter(b => b.type === 'table' && b.title !== '신규업체 등록사항');
   for (const tb of (tbs.length ? tbs : it.xlTable ? [it.xlTable] : [])) {
     const rows = pmTableRows(it, want, tb); if (!rows.some(r => r.name)) continue;
-    // 임차 표(호실 열이 있는 표) = 호실·구분마다 한 줄 (영종 05·06 샘플: "113호 보증금/임대인", "113호 월세/임대인" 따로)
+    // 임차 표(호실 열이 있는 표) = 호실·구분마다 한 줄 (회사 임차 샘플: "113호 보증금/임대인", "113호 월세/임대인" 따로)
     const per = (tb.cols || []).some(c => want.room.test(String(c).replace(/\s/g, '')));
     const g = new Map(), vats = []; let last = '', room = '';
     rows.forEach(r => {
@@ -512,7 +512,7 @@ function pmExpGroups(it) {
   }
   return [];
 }
-/* 지출결의서 적요 = 좁은 칸(A:D) 항목 · 넓은 칸(E:J) 업체 (영종 샘플: "판매수수료(1차) | ㈜○○", "수도요금 | ○○", "113호 보증금/임대인")
+/* 지출결의서 적요 = 좁은 칸(A:D) 항목 · 넓은 칸(E:J) 업체 (회사 샘플: "판매수수료(1차) | ㈜○○", "수도요금 | ○○", "113호 보증금/임대인")
    업체가 없으면 항목을 한 칸(A:J)에 */
 const pmExpTitle = t => String(t || '').replace(/\s*(?:에\s*관한|에\s*관하여|의)?\s*건(?=\s*(?:\(|$))/, '').trim();   // "견본주택 수도요금 납부의 건(6월분)" → "견본주택 수도요금 납부(6월분)"
 function pmExpItems(it) {
@@ -1066,7 +1066,7 @@ function pmAiDialog(it, onDone) {
     } catch (e) { toast('AI 초안을 만들지 못했습니다: ' + e.message); go.disabled = false; go.textContent = '초안 만들기'; }
   };
 }
-/* 비교견적 표: 확정 업체도 앞쪽 비교 업체 열에 있어야 함 (회사 샘플: 영종컨테이너 | 한마음 | 더원 | 확정(영종컨테이너))
+/* 비교견적 표: 확정 업체도 앞쪽 비교 업체 열에 있어야 함 (회사 샘플: 업체A | 업체B | 업체C | 확정(업체A))
    AI 가 확정 열에만 넣었으면 → 확정 열과 같은 값으로 비교 업체 열을 맨 앞에 넣음 */
 function pmCmpFixPick(tb) {
   const gs = pmCmpVendors(tb), fixG = gs.find(g => /^확정/.test(g)); if (!fixG) return false;

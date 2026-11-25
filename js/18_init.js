@@ -137,6 +137,15 @@ async function init() {
   if (hp.get('set')) state.setSub = hp.get('set');
   if (state.tab === 'meal' && (state.mealGroup === 'cater' || state.mealSub === 'cater')) { state.tab = 'cater'; state.caterSub = 'cater'; state.mealGroup = '현장'; state.mealSub = 'att'; }   // 예전 식대·출근부 안 캐터링 화면 → 식대·캐터링 탭
   if (state.tab === 'meal' && state.mealSub === 'meal') { state.tab = 'cater'; state.caterSub = 'meal'; state.mealSub = 'att'; }   // 예전 식대내역 화면 → 식대·캐터링 탭
+  // 새로고침 뒤 "이어서 열기" 화면: 아무 곳이나 누르거나 키를 누르면 전에 연 폴더 권한을 다시 받음 (브라우저 규칙상 사용자가 한 번은 눌러야 함)
+  let reopening = false;
+  const gateReopen = ev => {
+    if (reopening || FS.ready || !state.savedRootName || state.bgSolo || !document.body.classList.contains('data-gate')) return;
+    if (ev.target.closest && ev.target.closest('[data-act], input, select, textarea, .modal-bg, a')) return;
+    reopening = true; reopenRoot().finally(() => { reopening = false; });
+  };
+  document.addEventListener('pointerdown', gateReopen);
+  document.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') gateReopen(ev); });
   document.addEventListener('click', ev => {
     document.querySelectorAll('details.dd[open]').forEach(d => { if (!d.contains(ev.target) || ev.target.closest('.dd-i')) d.removeAttribute('open'); });
     const el = ev.target.closest('[data-act]');
@@ -271,10 +280,14 @@ async function init() {
       $('#saveState').before(b);
     }
     await mbInit();   // 10c 휴대폰 사진함 (상단 [📱 휴대폰 영수증 N장])
-    const h = await Promise.race([idb.get('root'), new Promise(r => setTimeout(() => r(null), 2000))]);
+    let slow = false;
+    const h = await Promise.race([idb.get('root'), new Promise(r => setTimeout(() => { slow = true; r(null); }, 6000))]);
     if (h) {
       state.savedRootName = h.name;
       try { if (await h.queryPermission({ mode: 'readwrite' }) === 'granted') await openRoot(h); } catch (e) { }
+    } else {   // 전에 폴더를 골랐는데 브라우저가 기억하지 못함 → 첫 화면에 이유 (05 gateView)
+      let info = null; try { info = JSON.parse(localStorage.getItem(ROOT_LS) || 'null'); } catch (e) { }
+      if (info && info.name) state.rootLost = { name: info.name, why: slow ? '브라우저 저장소가 6초 안에 답하지 않음' : info.err || '브라우저 저장소에 폴더 기록이 없음 (브라우저를 닫을 때 사이트 데이터를 지우는 설정이거나, 다른 주소·다른 브라우저로 연 경우)' };
     }
   }
   render();

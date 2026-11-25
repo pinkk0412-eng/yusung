@@ -549,12 +549,20 @@ async function openRoot(handle) {
   mbRefind();   // 10c 휴대폰 사진함: 이 데이터 폴더(드롭박스) 안 앱\… 폴더를 다시 찾음
   setTimeout(linkPending, 0);   // 폴더 연결 안 된 현장이 있으면 연결 창
 }
+/* 고른 데이터 폴더를 브라우저(IndexedDB)에 기억 → 새로고침 때 "이어서 열기" (18 init)
+   기억이 안 되면(브라우저 설정·html 파일로 열 때 등) 이유를 localStorage 에 남겨 첫 화면에 알림 (05 gateView) */
+const ROOT_LS = 'yusung_root_info';
+async function rootRemember(h) {
+  let err = await idb.set('root', h);
+  if (!err) { const back = await idb.get('root'); if (!back || back.kind !== 'directory') err = '저장한 폴더를 다시 읽지 못함'; }
+  try { localStorage.setItem(ROOT_LS, JSON.stringify({ name: h.name, err: err || '', at: todayStr() })); } catch (e) { }
+}
 async function pickRoot() {
   if (!window.showDirectoryPicker) { toast('이 브라우저는 폴더 저장을 지원하지 않습니다. 크롬 또는 엣지로 여세요.'); return; }
   try {
     const h = await showDirectoryPicker({ id: 'gyeongri-data', mode: 'readwrite' });
     const prev = FS.ready && FS.root ? { root: FS.root, db, keys: { ...SEC.keys } } : null;
-    await idb.set('root', h); state.savedRootName = h.name; await openRoot(h);
+    await rootRemember(h); state.savedRootName = h.name; await openRoot(h);
     // 다른 데이터 폴더로 바꿨는데 새 폴더에 현장이 없으면 → 예전 폴더의 현장을 회사 현장 폴더로 가져오기
     if (prev && FS.ready && FS.root === h && !(await prev.root.isSameEntry(h)) && db.sites.every(x => !x.folder) && prev.db.sites.some(x => x.folder)
       && confirm(`예전 데이터 폴더(${prev.root.name})의 현장 ${prev.db.sites.length}개(${prev.db.sites.map(x => x.name).join(', ')})를 이 폴더로 가져올까요?\n현장마다 회사 현장 폴더를 고르면 자료·영수증을 그 폴더로 복사합니다. (예전 폴더는 그대로 남음)`)) {

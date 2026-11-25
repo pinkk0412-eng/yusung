@@ -33,7 +33,7 @@ function orgCalc(o) {
   const per = orgPerUnit(o.kind), from = o.from, to = o.to || o.from, rate = toNum(o.rate);
   const paid = orgPaidMap(o.kind, o.id);
   const prevs = orgPms(o.kind, o.id).filter(p => toNum(p.org.round) < o.round), prevP = prevs.find(p => toNum(p.org.round) === o.round - 1);
-  // 전회 = 지난 차수 모두의 누계 (영종 62 대비표: 전회(1/28~2/15) = 1·2차 · 금회(2/16~2/28) · 누계(1/28~2/28) = 전회 + 금회)
+  // 전회 = 지난 차수 모두의 누계 (회사 샘플 대비표: 전회(1/28~2/15) = 1·2차 · 금회(2/16~2/28) · 누계(1/28~2/28) = 전회 + 금회)
   // 전회 기간: 첫 차수 시작일 ~ 바로 앞 차수 종료일 → 지난 품의가 없으면 1~15일·16~말일이면 바로 앞 반달, 아니면 비움
   const d0 = +String(from).slice(8, 10), ym0 = String(from).slice(0, 7), first = prevs.map(p => p.org.from).filter(Boolean).sort()[0];
   const pp = prevP && prevP.org.to ? { from: first || prevP.org.from, to: prevP.org.to } : d0 === 1 ? rndPeriod(ymAdd(ym0, -1), 2) : d0 === 16 ? rndPeriod(ym0, 1) : { from: '', to: '' };

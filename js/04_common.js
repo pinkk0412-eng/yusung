@@ -93,7 +93,10 @@ function txNote(t) {
 const idb = {
   open() { return new Promise((res, rej) => { const r = indexedDB.open('gyeongri', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
   async get(k) { try { const d = await this.open(); return await new Promise(res => { const q = d.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(undefined); }); } catch (e) { return undefined; } },
-  async set(k, v) { try { const d = await this.open(); await new Promise(res => { const t = d.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = res; t.onerror = res; }); } catch (e) { } },
+  async set(k, v) {   // 실패하면 이유를 돌려줌 (폴더 기억 실패 진단 — 01 pickRoot)
+    try { const d = await this.open(); return await new Promise(res => { const t = d.transaction('kv', 'readwrite'); try { t.objectStore('kv').put(v, k); } catch (e) { res(`${e.name}: ${e.message}`); return; } t.oncomplete = () => res(''); t.onerror = () => res(String(t.error && t.error.message || '저장 실패')); }); }
+    catch (e) { return `${e.name || ''}: ${e.message || e}`; }
+  },
 };
 
 /* ---------- 공통 UI ---------- */
