@@ -931,7 +931,7 @@ const PM_AI_SCHEMA = {
     table: {
       type: 'object', additionalProperties: false, required: ['cols', 'rows', 'unit', 'note'],
       properties: {
-        cols: { type: 'array', items: { type: 'string' } },
+        cols: { type: 'array', items: { type: 'string' }, description: '열 이름. 서로 다른 업체 견적서가 2곳 이상이면 비교견적: "업체A|단가","업체A|금액",…,"확정(업체A)|단가","확정(업체A)|금액"' },
         rows: { type: 'array', items: { type: 'array', items: { type: 'string' } } },
         unit: { type: 'string', description: '표 위 오른쪽 글 예) (단위: 원 / VAT 포함)' },
         note: { type: 'string', description: '표 아래 메모 (업체 선정 사유 등), 없으면 빈 문자열' },
@@ -968,6 +968,7 @@ const PM_AI_GUIDE = `당신은 분양대행사 (주)유성 현장의 경리 담�
 - unit: 견적 금액이 부가세 포함이면 "(단위: 원 / VAT 포함)", 별도면 "(단위: 원 / VAT 별도)", 모르면 "" (비우면 VAT 포함으로 들어감).
 
 [반드시]
+- 서로 다른 업체의 견적서가 2개 이상이면 세부내역 표는 꼭 비교견적 모양(업체별 단가·금액 열 + 확정 업체 열). 견적서마다 품목이 조금 달라도 같은 품목끼리 한 줄에 맞추고 없는 칸은 "-".
 - 금액·수량·날짜·업체명·소재지·이름은 메모나 첨부 서류에 있는 것만. 없으면 ○○ 또는 빈칸 — 절대 지어내지 않음.
 - 메모에 없는 칸은 "지금 내용"이 있으면 살리고, 없으면 "".
 - attachments: 첨부한 파일 순서대로 각 서류 이름 (예: 견적서(○○상사), 임대차계약서). 파일이 없으면 [].
@@ -985,7 +986,7 @@ function pmAiPrompt(it, memo, files, examples) {
   // 요금 절약: 새 품의(양식 기본값뿐)는 "지금 내용"을 보내지 않음, 다시 쓰기는 사람이 고친 칸만 짧게
   const now = it.aiPickTpl ? null : Object.fromEntries(Object.entries({ 양식: tp ? tp.label : '', 제목: it.title, 업체명: it.vendor, 시행기간: it.period, 결제방법: it.payMethod, 결제일: it.payDate, 본문: tx && tx.text, 표: tb && (tb.rows || []).some(r => r.some(v => String(v ?? '').trim())) ? { 열: tb.cols, 줄: tb.rows.filter(r => r.some(v => String(v ?? '').trim())) } : null }).filter(([, v]) => v && String(v).trim()));
   return `현장명: ${S}${it.aiPickTpl ? '\n양식 고르기: 예' : ''}
-${files.length ? `첨부 파일: ${files.map((f, i) => `${i + 1}. ${f.name}`).join(' / ')}\n` : ''}
+${files.length ? `첨부 파일: ${files.map((f, i) => `${i + 1}. ${f.name}`).join(' / ')}\n` : ''}${files.length >= 2 ? `※ 서류가 ${files.length}개입니다. 서로 다른 업체의 견적서가 2개 이상이면 세부내역 표를 비교견적(업체별 "업체|단가"·"업체|금액" 열 + "확정(업체)|단가"·"확정(업체)|금액" 열)으로 쓰고, 표 아래에 "※ 업체 선정 사유 : …".\n` : ''}
 [메모]
 ${memo || '(메모 없음 — 첨부 서류만 보고 작성)'}
 ${now && Object.keys(now).length ? `\n[지금 내용]\n${JSON.stringify(now)}\n` : ''}${examples.length ? `\n[이 현장 지난 품의서 — 말투 본보기]\n${JSON.stringify(examples)}\n` : ''}`;
@@ -1032,7 +1033,10 @@ function pmAiDialog(it, onDone) {
       it.aiMemo = memo;
       const n = await pmAiApply(it, out, files);
       ov.remove();
-      onDone((out.warnings || []).map(w => String(w).trim()).filter(Boolean));
+      const ws = (out.warnings || []).map(w => String(w).trim()).filter(Boolean);
+      const quotes = (out.attachments || []).filter(a => /견적/.test(a) && !/비교견적/.test(a)).length, tb = pmBlocks(it).find(b => b.type === 'table' && b.title !== '신규업체 등록사항');
+      if (quotes >= 2 && tb && !pmCmpVendors(tb).length) ws.unshift(`견적서가 ${quotes}개인데 세부내역 표가 비교견적 모양(업체별 단가·금액 + 확정 업체)이 아닙니다 — 표를 고치거나 메모에 "비교견적으로" 적고 [✨ AI로 다시 쓰기]`);   // AI 가 비교견적을 빠뜨린 경우
+      onDone(ws);
       toast(`AI 초안을 넣었습니다${n ? ` · 서류 ${n}개를 첨부서류에 등록` : ''}. 결재 올리기 전에 내용을 직접 확인해 주세요.`);
     } catch (e) { toast('AI 초안을 만들지 못했습니다: ' + e.message); go.disabled = false; go.textContent = '초안 만들기'; }
   };
