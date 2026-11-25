@@ -490,6 +490,6 @@ function viewPumui() {
       ${due.length ? `<div class="banner info small">이번 달 정기 청구: ${due.map(([, ym, l, tab]) => `<button class="chip" data-act="goto" data-tab="${tab}" data-ym="${ym}">${l} →</button>`).join(' ')}</div>` : ''}
       <div class="row small" style="margin-bottom:8px"><select data-ch="pmFilter"><option value="">전체 (${all.length}건)</option>${[...PM_STATUS, '스캔없음'].map(x => `<option ${x === f ? 'selected' : ''} value="${x}">${x === '스캔없음' ? '스캔본 없는 미완료' : `${x} (${cnt(x)}건)`}</option>`).join('')}</select>
         <input data-ch="pmQ" value="${esc(q)}" placeholder="제목·업체·번호 검색" class="inp" style="width:220px"></div>
-      ${pmListTable(list, '품의서가 없습니다. [+ 새 품의서]로 만드세요.<br>첫 번호는 설정 → 현장 정보 → "품의서 첫 번호"')}
+      ${pmListTable(list, '품의서가 없습니다. [+ 새 품의서]로 만드세요.')}
       <p class="muted small">스캔본은 A. 기안품의/B. 스캔본에 넣고 [다시 읽기] → 자동 "결재완료" · 반복 품의는 [다음 회차]</p>`;
 }

@@ -30,8 +30,6 @@ function settingsHtml() {
         <label title="결제내역서(엑셀)가 이 달부터 시작하고, 업무 홈의 '밀린 일'도 이 달부터 셉니다">현장 시작월 (결제내역서 시작)<input type="month" value="${esc(s.startYm || '')}" data-ch="site" data-f="startYm"></label>
         <label title="현장 손익은 투입한 달부터 표시">현장 투입일<input type="date" value="${esc(s.inDate || '')}" data-ch="site" data-f="inDate"></label>
         ${f('문서번호 앞부분', 'docPrefix', 'YS-○○현장')}
-        <label title="이 현장에서 다음에 쓸 품의 번호">품의서 첫 번호<input class="num" value="${fmt0(s.pumuiStart)}" data-ch="site" data-f="pumuiStart" data-num="1" data-fid="s_pms" placeholder="예) 15"></label>
-        <label title="다음에 쓸 번호 — 품의 번호와 따로">전도금 청구 J 번호<input class="num" value="${fmt0(s.jStart)}" data-ch="site" data-f="jStart" data-num="1" data-fid="s_js" placeholder="예) 12 → J12"></label>
       </div>
       <h3>정산 기준</h3>
       <div class="form-grid">
@@ -39,12 +37,7 @@ function settingsHtml() {
         <label>캐터링 중식 기본 단가<input class="num" value="${fmt0(s.cateringLunch)}" data-ch="site" data-f="cateringLunch" data-num="1" data-fid="s_cl"></label>
         <label title="현장 손익의 분양률 계산에 씀">총 세대수<input class="num" value="${fmt0(s.totalUnits)}" data-ch="site" data-f="totalUnits" data-num="1" data-fid="s_tu" placeholder="960"></label>
         <label class="small" style="align-self:end" title="끄면 법인카드 내역의 청구 칸을 숨김"><input type="checkbox" data-ch="site" data-f="claimOn" ${claimOn() ? 'checked' : ''}> 시행사 청구 적용</label>
-        <label title="시행사·신탁사가 수수료 청구액(부가세 포함)에서 떼고 주는 비율 — 매출 청구 차수형 수수료의 기본값 (비우면 0%)">유보율 % (매출 청구)<input class="num" value="${esc(s.retainRate ?? '')}" data-ch="site" data-f="retainRate" data-fid="s_rr" placeholder="0"></label>
       </div>
-      <h3>분양대행수수료 청구공문 <span class="muted small">— 매출 청구 [+ 수수료 청구 (차수형)]의 공문에 들어감</span></h3>
-      <div class="form-grid">${(() => { const d = s.feeDoc || {}, g = (label, k, ph, span) => `<label${span ? ' style="grid-column:span 2"' : ''}>${label}<input value="${esc(d[k] ?? '')}" data-ch="feeDoc" data-f="${k}" data-fid="fd_${k}" placeholder="${esc(ph)}"></label>`;
-        return g('수신', 'recv', '○○신탁 주식회사') + g('참조', 'cc', '○○ 담당자') + g('제목 앞부분', 'title', `${s.fullName || '○○'} 공동주택`) + g('입금계좌', 'account', '○○은행 000-000000-00-000 (예금주)')
-          + g('계약서 근거 조항', 'clause', '분양대행 용역계약서 제○조(용역대금의 지급)', true) + g('첨부서류 (쉼표로 구분)', 'attach', FEE_ATTACH, true); })()}</div>
       <h3>결재라인</h3>
       <div class="form-grid">${s.approvers.map((a, i) => `<label>${i + 1}번 칸<span class="row"><input style="width:92px" value="${esc(a.title)}" data-ch="appr" data-i="${i}" data-f="title" data-fid="ap_t${i}"><input class="grow" value="${esc(a.name)}" placeholder="직책/이름" data-ch="appr" data-i="${i}" data-f="name" data-fid="ap_n${i}"></span></label>`).join('')}</div>
       <div class="row" style="margin-top:8px"><button class="btn sm" data-act="apprAdd">+ 결재칸 추가</button>${s.approvers.length > 1 ? '<button class="btn sm" data-act="apprDel">− 마지막 칸 삭제</button>' : ''}</div>
