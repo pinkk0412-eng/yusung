@@ -6,26 +6,18 @@
  * 지급된 세대 = 같은 종류 조직 지급 품의들의 "판매내역" 표(지급액 있는 동호수) → 중복 경고 · 대비표 전회/누계 */
 const ORG_KINDS = [['판매수수료', true], ['계약축하금', true], ['인센티브', true], ['추가수수료', true], ['일비', false], ['광고비 선지급', false]];   // [종류, 세대별]
 const orgPerUnit = k => (ORG_KINDS.find(x => x[0] === k) || [k, true])[1];
-const unitKey = v => String(v || '').replace(/\s/g, '');
+// 세대 붙여넣기·중복·기간 계산은 00_core 의 차수형 공통 함수(rnd*)를 씀 (12d 분양대행수수료 청구와 같이)
 const orgDot = d => (d ? `${String(d).replace(/-/g, '.')}.` : '');
 const orgMd = d => (d ? `${+d.slice(5, 7)}/${+d.slice(8, 10)}` : '');
-const ORG_TOT = /^(계|소계|부가세|합계|합\s*계|총계|VAT)$/;
-function orgPeriod(ym, half) {
-  const last = new Date(+ym.slice(0, 4), monthNo(ym), 0).getDate();
-  return +half === 1 ? { from: `${ym}-01`, to: `${ym}-15` } : { from: `${ym}-16`, to: `${ym}-${pad2(last)}` };
-}
 const orgPms = (kind, exceptId, sid = db.cur) => pmAll(sid).filter(p => p.org && p.org.kind === kind && p.id !== exceptId);
 // 품의의 판매내역 표 → [{ key(동호수), amt }] (지급액 0·'-' = 보류 줄은 뺌)
 function orgSaleRows(p) {
   const tb = pmBlocks(p).find(b => b.type === 'table' && /판매내역/.test(b.title || '')); if (!tb) return [];
   const di = tb.cols.findIndex(c => /동호/.test(c)), ai = tb.cols.findIndex(c => /지급액|금액/.test(c)); if (di < 0 || ai < 0) return [];
-  return (tb.rows || []).filter(r => unitKey(r[di]) && !ORG_TOT.test(String(r[0] || '').trim())).map(r => ({ key: unitKey(r[di]), amt: toNum(r[ai]) })).filter(x => x.amt > 0);
+  return (tb.rows || []).filter(r => unitKey(r[di]) && !RND_TOT.test(String(r[0] || '').trim())).map(r => ({ key: unitKey(r[di]), amt: toNum(r[ai]) })).filter(x => x.amt > 0);
 }
-function orgPaidMap(kind, exceptId, sid = db.cur) {   // 동호수 → { r, amt, src }
-  const m = new Map();
-  orgPms(kind, exceptId, sid).forEach(p => orgSaleRows(p).forEach(x => m.set(x.key, { r: toNum(p.org.round), amt: x.amt, src: `품의 ${p.no}번` })));
-  return m;
-}
+// 동호수 → { r, amt, src } (같은 종류 다른 차수 품의들의 판매내역)
+const orgPaidMap = (kind, exceptId, sid = db.cur) => rndPaidMap(orgPms(kind, exceptId, sid).map(p => ({ r: p.org.round, src: `품의 ${p.no}번`, units: orgSaleRows(p) })));
 function orgNextRound(kind, sid = db.cur) {   // 같은 종류의 마지막 차수 + 1 (조직 지급 품의 · 예전 품의 제목 "(N차)")
   const k = kind.replace(/\s/g, ''); let mx = 0;
   pmAll(sid).forEach(p => {
@@ -36,68 +28,41 @@ function orgNextRound(kind, sid = db.cur) {   // 같은 종류의 마지막 차�
 }
 const orgLast = kind => orgPms(kind).sort((a, b) => toNum(b.org.round) - toNum(a.org.round))[0];
 
-/* 붙여넣은 판매내역 (엑셀 복사, 탭 구분) → 세대 목록. 머리글 줄이 있으면 열 이름으로, 없으면 아래 순서 */
-const UNIT_FIELDS = [['dong', /동\s*호|호수/], ['type', /타입|평형/], ['date', /계약\s*일/], ['buyer', /계약자|고객|성명/], ['chief', /총괄/], ['hq', /본부/], ['team', /팀/],
-  ['agent', /담당|판매자|직원/], ['paid2', /2차|입금/], ['status', /상태|해지|보류/], ['memo', /비고|사유|메모/]];
-const unitDate = v => { const x = parseDateCell(String(v || '').trim()); return x ? x.date : ''; };
-function orgParseUnits(text) {
-  const lines = String(text || '').replace(/\r/g, '').split('\n').map(l => l.split('\t').map(x => x.trim())).filter(c => c.some(Boolean));
-  if (!lines.length) return [];
-  let map = UNIT_FIELDS.map(f => f[0]);
-  const isHead = h => h && !/^[\d\s,.\-\/:]+$/.test(h) && !/^\d+-\d+/.test(h);   // 날짜·숫자·동호수(101-1203) 칸은 머리글 아님
-  const dataLike = lines[0].some(h => /^\d+-\d+$/.test(h) || parseDateCell(h));
-  if (!dataLike && lines[0].filter(h => isHead(h) && UNIT_FIELDS.some(f => f[1].test(h))).length >= 2) {
-    const used = new Set(); map = lines[0].map(h => { const f = isHead(h) && UNIT_FIELDS.find(x => !used.has(x[0]) && x[1].test(h)); if (f) used.add(f[0]); return f ? f[0] : null; });
-    lines.shift();
-  }
-  return lines.map(cells => {
-    const o = {}; map.forEach((k, j) => { if (k && cells[j]) o[k] = cells[j]; });
-    if (o.date) o.date = unitDate(o.date) || o.date;
-    if (o.paid2) o.paid2 = unitDate(o.paid2) || o.paid2;
-    const st = `${o.status || ''} ${o.memo || ''}`;
-    o.status = /해지|취소/.test(st) ? '해지' : /보류/.test(st) ? '보류' : '';
-    return o;
-  }).filter(o => unitKey(o.dong) && !ORG_TOT.test(o.dong));
-}
-
 /* 대비표(전회·금회·누계) · 판매내역(N차) 계산 — o.units = 붙여넣은 세대 */
 function orgCalc(o) {
   const per = orgPerUnit(o.kind), from = o.from, to = o.to || o.from, rate = toNum(o.rate);
   const paid = orgPaidMap(o.kind, o.id);
-  const prevP = orgPms(o.kind, o.id).find(p => toNum(p.org.round) === o.round - 1);
-  // 전회 기간: 지난 차수 품의 → 없으면 1~15일·16~말일이면 바로 앞 반달, 아니면 비움
-  const d0 = +String(from).slice(8, 10), ym0 = String(from).slice(0, 7);
-  const pp = prevP && prevP.org.from ? { from: prevP.org.from, to: prevP.org.to } : d0 === 1 ? orgPeriod(ymAdd(ym0, -1), 2) : d0 === 16 ? orgPeriod(ym0, 1) : { from: '', to: '' };
-  const all = (o.units || []).filter(u => u.status !== '해지');
-  const dup = all.filter(u => paid.has(unitKey(u.dong)));   // 이미 다른 차수에 지급 → 뺌
-  const rest = all.filter(u => !paid.has(unitKey(u.dong)));
-  const pay = rest.filter(u => u.status !== '보류'), hold = rest.filter(u => u.status === '보류');
+  const prevs = orgPms(o.kind, o.id).filter(p => toNum(p.org.round) < o.round), prevP = prevs.find(p => toNum(p.org.round) === o.round - 1);
+  // 전회 = 지난 차수 모두의 누계 (영종 62 대비표: 전회(1/28~2/15) = 1·2차 · 금회(2/16~2/28) · 누계(1/28~2/28) = 전회 + 금회)
+  // 전회 기간: 첫 차수 시작일 ~ 바로 앞 차수 종료일 → 지난 품의가 없으면 1~15일·16~말일이면 바로 앞 반달, 아니면 비움
+  const d0 = +String(from).slice(8, 10), ym0 = String(from).slice(0, 7), first = prevs.map(p => p.org.from).filter(Boolean).sort()[0];
+  const pp = prevP && prevP.org.to ? { from: first || prevP.org.from, to: prevP.org.to } : d0 === 1 ? rndPeriod(ymAdd(ym0, -1), 2) : d0 === 16 ? rndPeriod(ym0, 1) : { from: '', to: '' };
+  const { pay, hold, dup } = rndUnits(o.units, paid);   // dup = 이미 다른 차수에 지급 → 뺌
   let prev, cur, cum;
   if (per) {
-    const pv = [...paid.values()], pr = pv.filter(x => x.r === o.round - 1), before = pv.filter(x => x.r < o.round);
-    const prevDone = prevP ? toNum(prevP.org.done) : before.length;
-    prev = { done: prevDone, n: pr.length, amt: sum(pr, x => x.amt) };
+    const before = [...paid.values()].filter(x => x.r < o.round);
+    const prevDone = prevP && prevP.org.done !== undefined && prevP.org.done !== '' ? toNum(prevP.org.done) : before.length;   // 완납세대 누계 (지난 차수 품의에 적어 둔 값)
+    prev = { done: prevDone, n: before.length, amt: sum(before, x => x.amt) };
     const done = o.done !== undefined && o.done !== '' ? toNum(o.done) : before.length + pay.length + hold.length;   // 완납세대 누계 (비우면 지급 누계 + 보류)
-    cur = { done, n: pay.length, amt: pay.length * rate };
-    cum = { done, n: before.length + pay.length, amt: sum(before, x => x.amt) + cur.amt };
+    cur = { done: Math.max(0, done - prevDone), n: pay.length, amt: pay.length * rate, cumDone: done };   // 금회 칸 = 이번 기간 (누계 − 전회)
+    cum = { done, n: before.length + pay.length, amt: prev.amt + cur.amt };
   } else {
-    const ps = orgPms(o.kind, o.id).filter(p => toNum(p.org.round) < o.round);
-    prev = { amt: sum(ps.filter(p => toNum(p.org.round) === o.round - 1), p => p.org.supply) };
+    prev = { amt: sum(prevs, p => p.org.supply) };
     cur = { amt: toNum(o.supply) };
-    cum = { amt: sum(ps, p => p.org.supply) + cur.amt };
+    cum = { amt: prev.amt + cur.amt };
   }
   return { per, from, to, pp, rate, pay, hold, dup, paid, prev, cur, cum, supply: cur.amt, vat: Math.round(cur.amt * 0.1) };
 }
 function orgBuild(o) {   // o = { kind, round, from, to, rate, supply, done, units, vendor, firstNo, date }
   const s = site(), S = s.fullName || s.name, c = orgCalc(o), K = o.kind;
-  const P = c.pp.from ? `전회(${orgMd(c.pp.from)}~${orgMd(c.pp.to)})` : '전회', C = `금회(${orgMd(c.from)}~${orgMd(c.to)})`;
+  const P = c.pp.from ? `전회(${orgMd(c.pp.from)}~${orgMd(c.pp.to)})` : '전회', C = `금회(${orgMd(c.from)}~${orgMd(c.to)})`, Cm = `누계(${orgMd(c.pp.from || c.from)}~${orgMd(c.to)})`;
   const vat = v => Math.round(toNum(v) * 0.1);
   const cmp = c.per
-    ? { cols: ['구분', '세대당 수수료', `${P}|완납세대`, `${P}|지급대상`, `${P}|금액`, `${C}|완납세대`, `${C}|지급대상`, `${C}|금액`, '누계|완납세대', '누계|지급대상', '누계|금액', '비고'],
+    ? { cols: ['구분', '세대당 수수료', `${P}|완납세대`, `${P}|지급대상`, `${P}|금액`, `${C}|완납세대`, `${C}|지급대상`, `${C}|금액`, `${Cm}|완납세대`, `${Cm}|지급대상`, `${Cm}|금액`, '비고'],
       rows: [[K, fmt(c.rate), c.prev.done, c.prev.n, fmt(c.prev.amt), c.cur.done, c.cur.n, fmt(c.cur.amt), c.cum.done, c.cum.n, fmt(c.cum.amt), c.hold.length ? `보류 ${c.hold.length}세대` : ''],
         ['부가세', '', '', '', fmt(vat(c.prev.amt)), '', '', fmt(vat(c.cur.amt)), '', '', fmt(vat(c.cum.amt)), ''],
         ['합계', '', '', '', fmt(c.prev.amt + vat(c.prev.amt)), '', '', fmt(c.cur.amt + vat(c.cur.amt)), '', '', fmt(c.cum.amt + vat(c.cum.amt)), '']] }
-    : { cols: ['구분', P.replace('전회', '전회 금액'), C.replace('금회', '금회 금액'), '누계 금액', '비고'],
+    : { cols: ['구분', P.replace('전회', '전회 금액'), C.replace('금회', '금회 금액'), Cm.replace('누계', '누계 금액'), '비고'],
       rows: [[K, fmt(c.prev.amt), fmt(c.cur.amt), fmt(c.cum.amt), ''], ['부가세', fmt(vat(c.prev.amt)), fmt(vat(c.cur.amt)), fmt(vat(c.cum.amt)), ''], ['합계', fmt(c.prev.amt + vat(c.prev.amt)), fmt(c.cur.amt + vat(c.cur.amt)), fmt(c.cum.amt + vat(c.cum.amt)), '']] };
   const B = [{ type: 'text', num: true, title: '', text: [`${S} 현장 조직영업팀 ${K} 지급에 관하여 아래와 같이 품의합니다.`,
     `가. 기안품의 '${o.firstNo || '○○'}'에 의거하여 ${K} 지급`,
@@ -115,26 +80,14 @@ function orgBuild(o) {   // o = { kind, round, from, to, rate, supply, done, uni
   }
   B.push({ type: 'attach', num: true, title: '첨부서류', items: [['지출결의서', true], ['거래명세서', true], ['세금계산서', true], ['계약서 사본', c.per], ['입금내역서(후첨)', false]].map(([name, ok]) => ({ name, ok })) });
   const it = pmNew({ date: o.date || todayStr(), tpl: 'orgpay', title: `조직영업팀 ${K} 지급의 건(${o.round}차)`, vendor: o.vendor || '', firstNo: o.firstNo || '',
-    period: `${orgDot(c.from)}~${orgDot(c.to)}`, payMethod: '계좌이체', payDate: '가까운 자금집행일', claim: '가능', budget: '', amount: c.supply + c.vat, blocks: B,
-    org: { kind: K, round: o.round, ym: String(c.from).slice(0, 7), from: c.from, to: c.to, rate: c.rate, supply: c.supply, ...(c.per ? { done: c.cur.done } : {}) } });
+    period: `${orgDot(c.from)}~${orgDot(c.to)}`, payMethod: '계좌이체', payDate: '가까운 자금집행일', claim: '가능', budget: '예산 심의 전', amount: c.supply + c.vat, blocks: B,
+    org: { kind: K, round: o.round, ym: String(c.from).slice(0, 7), from: c.from, to: c.to, rate: c.rate, supply: c.supply, ...(c.per ? { done: c.cum.done } : {}) } });   // done = 완납세대 누계 (다음 차수 전회 칸)
   it.docNo = pmDocNo(it.no, it.date);
   return it;
 }
-const orgAddDay = (d, n) => { const x = new Date(`${d}T00:00:00Z`); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
-function orgHalfOf(from) {   // 시작일이 1일 → 15일까지 · 16일 → 말일까지 (15일·말일 마감)
-  const ym = from.slice(0, 7), d = +from.slice(8, 10);
-  return d === 1 ? orgPeriod(ym, 1) : d === 16 ? orgPeriod(ym, 2) : null;
-}
-function orgDefaultPeriod(kind) {   // 같은 종류 지난 차수 다음 날부터 · 없으면 오늘 기준 (1~5일 = 지난달 16~말일 · 6~20일 = 이번 달 1~15일 · 21일~ = 이번 달 16~말일)
+function orgDefaultPeriod(kind) {   // 같은 종류 지난 차수 다음 날부터 · 없으면 오늘 기준 (00 rndNextPeriod)
   const last = kind && orgLast(kind);
-  if (last && /^\d{4}-\d{2}-\d{2}$/.test(last.org.to || '')) {
-    const from = orgAddDay(last.org.to, 1), h = orgHalfOf(from);
-    if (h) return h;
-    const len = Math.round((new Date(last.org.to) - new Date(last.org.from)) / 864e5);
-    return { from, to: orgAddDay(from, Math.max(0, len)) };
-  }
-  const t = todayStr(), d = +t.slice(8, 10), ym = t.slice(0, 7);
-  return d <= 5 ? orgPeriod(ymAdd(ym, -1), 2) : orgPeriod(ym, d <= 20 ? 1 : 2);
+  return rndNextPeriod(last && last.org);
 }
 function orgPayForm(kind0) {
   if (!FS.ready) return;
@@ -158,7 +111,7 @@ function orgPayForm(kind0) {
     { label: '프로그램에서 작성', cls: 'primary', onClick: () => { const o = read(); if (!o.round) { toast('차수를 넣으세요.'); return true; } setTimeout(() => pmEditor(orgBuild(o)), 0); } }]);
   const v = id => $('#' + id, r).value;
   const read = () => ({ kind: v('opKind'), round: toNum(v('opRound')), from: v('opFrom') || dp.from, to: v('opTo') || v('opFrom') || dp.to, rate: toNum(v('opRate')), supply: toNum(v('opSup')), done: v('opDone').trim(),
-    units: orgParseUnits(v('opPaste')), vendor: v('opVendor').trim(), firstNo: v('opFirst').trim(), date: v('opDate') || todayStr() });
+    units: rndParseUnits(v('opPaste'), (v('opFrom') || dp.from || '').slice(0, 7) || undefined),vendor: v('opVendor').trim(), firstNo: v('opFirst').trim(), date: v('opDate') || todayStr() });
   const info = () => {
     const o = read(), c = orgCalc(o);
     $('#opInfo', r).innerHTML = c.per
@@ -180,7 +133,7 @@ function orgPayForm(kind0) {
     info();
   };
   $('#opKind', r).onchange = onKind;
-  $('#opFrom', r).addEventListener('change', () => { const h = orgHalfOf(v('opFrom')); if (h) $('#opTo', r).value = h.to; info(); });   // 1일·16일을 고르면 종료일 15일·말일
+  $('#opFrom', r).addEventListener('change', () => { const h = rndHalfOf(v('opFrom')); if (h) $('#opTo', r).value = h.to; info(); });   // 1일·16일을 고르면 종료일 15일·말일
   r.querySelectorAll('#opRound,#opFrom,#opTo,#opRate,#opSup,#opDone,#opPaste').forEach(el => { el.oninput = info; el.onchange = info; });
   onKind();
 }

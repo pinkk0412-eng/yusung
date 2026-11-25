@@ -48,7 +48,9 @@ function payRows(sid, ym, create) {
     const autoOt = sum(Object.values((att.__ot || {})[s.id] || {}));
     const pc = payChg(rec, dim), a = att[s.id] || {};
     const attSplit = pc ? { before: sum(Object.entries(a).filter(([d]) => +d < pc.day), ([, v]) => attValue(v)), after: sum(Object.entries(a).filter(([d]) => +d >= pc.day), ([, v]) => attValue(v)) } : null;
-    out.push({ s, rec, c: payCalc(rec, dim, attCount(a), autoOt, attSplit) });
+    const ext = { tax: db.settings.tax };
+    if (rec.taxType === 'daily') { const ot = (att.__ot || {})[s.id] || {}; ext.days = [...new Set([...Object.keys(a), ...Object.keys(ot)])].map(d => ({ v: attValue(a[d]), ot: toNum(ot[d]) })); }   // 일용근로: 하루씩 원천세
+    out.push({ s, rec, c: payCalc(rec, dim, attCount(a), autoOt, attSplit, ext) });
   }
   return out;
 }
@@ -158,7 +160,7 @@ function viewPay() {
         ${M(`<td>${inp(r, 'incentive', rec.incentive, 76)}</td>`)}
         <td class="num"><b>${fmt(c.gross)}</b></td>
         <td>${sel(r, 'taxType', Object.entries(TAX_TYPES))}</td>
-        <td class="num">${fmt0(c.tax)}</td><td class="num">${fmt0(c.local)}</td>
+        ${c.small ? '<td class="num muted" title="소액부징수 — 소득세 1,000원 미만이라 떼지 않음 (설정 › 원천세)">0</td><td class="num muted" title="소액부징수">0</td>' : `<td class="num">${fmt0(c.tax)}</td><td class="num">${fmt0(c.local)}</td>`}
         <td class="num pay-net"><b>${fmt(c.net)}</b></td>
         <td>${sel(r, 'payer', [['유성', '유성'], ['시행사', '시행사']])}</td>
         ${M(`<td>${sel(r, 'plGroup', PL_GROUPS.map(x => [x, x]))}</td>`)}
@@ -172,6 +174,7 @@ function viewPay() {
     + MENU('식대', [MI('payMealRate', '식대 단가 적용', '', '출근부에 적은 구분별 식대 단가를 이 달 인원에게'), MI('payMealFill', '식대일수 채우기', '', '식대일수가 빈 사람 = 근무일수')]) + BTN('goto', '출근부 입력 →', 'data-tab="meal"'))}
     ${!isAdmin() ? `<div class="banner warn small">🔒 경리 모드 — 비공개 급여 인원 ${db.staff.filter(x => x.siteId === db.cur && x.active !== false && isSecretStaff(x)).length}명(유성 정직원${secOpt().teams ? '·' + esc(secOpt().teams) : ''})은 표·합계에서 빠져 있습니다.${payLocked() ? ' 인건비 자금청구서·세부내역 인쇄와 엑셀 저장은 관리자 모드에서 하세요.' : ''}</div>` : ''}
     <div class="banner info small">회색 = 출근부 자동 (입력하면 우선) · 식대: 지급 + / 캐터링 공제 − · 월급 중도 입·퇴사는 일할일수에 재직일수</div>
+    ${rows.some(r => r.rec.taxType === 'daily' || r.c.small) ? `<div class="banner warn small">원천세: ${rows.some(r => r.rec.taxType === 'daily') ? `일용근로소득 = 하루 (일급 + 연장 − ${fmt(taxOpt(db.settings.tax).dDed)}원) × ${taxOpt(db.settings.tax).dRate}% × (1 − ${taxOpt(db.settings.tax).dCredit}%), 식대 제외 · ` : ''}소득세 1,000원 미만은 소액부징수(회색 0) — <b>세무 확인 필요</b> (설정 › 원천세에서 바꿈)</div>` : ''}
     <div class="stats">
       <div class="stat"><div class="k">총급여 (세전)</div><div class="v">${fmt(T('gross'))}</div></div>
       <div class="stat"><div class="k">원천세·부가세</div><div class="v">${fmt(T('tax') + T('local'))}</div></div>
@@ -258,8 +261,18 @@ function docPayDetail(ym) {
   return `<div class="doc pd"><div class="pd-title">${esc(s.name)}현장 영업팀 인건비 세부내역(${monthNo(ym)}월)</div>
     <table class="pd-tbl"><colgroup>${[3, 2.4, 5.4, 7, 4.4, 5, 5, 8.6, 5.4, 4.4, 6.4, 6.4, 8.4, 7.4, 6, 6.4, 8].map(w => `<col style="width:${w}%">`).join('')}</colgroup>
       <thead><tr>${H('구분', ' colspan="2" rowspan="2"')}${H('성명', ' rowspan="2"')}${H('급여', ' colspan="2"')}${H('연장수당', ' colspan="2"')}${H('⑤급여계<br>((①×②)+(③×④))', ' rowspan="2"')}${H('⑥<br>식대<br>적용액', ' rowspan="2"')}${H('⑦<br>식대<br>일수', ' rowspan="2"')}${H('⑧<br>식대계<br>(⑥×⑦)', ' rowspan="2"')}${H('⑨<br>인센티브', ' rowspan="2"')}${H('⑩<br>총급여액<br>(⑤+⑧+⑨)', ' rowspan="2" class="pd-l"')}${H('부가세(10%)/원천세(3.3%)', ' colspan="3" class="pd-l"')}${H('⑭<br>실지급액<br>(⑩+⑬)<br>(⑩-⑬)', ' rowspan="2" class="pd-l"')}</tr>
-      <tr>${H('①<br>급여단가')}${H('②<br>근무<br>일수')}${H('③<br>연장<br>시급')}${H('④<br>연장<br>시간')}${H('⑪<br>부가세(10%)<br>원천세(3%)', ' class="pd-l"')}${H('⑫<br>주민세<br>(⑪×10%)')}${H('⑬<br>합계<br>(⑪+⑫)')}</tr></thead>
+      <tr>${H('①<br>급여단가')}${H('②<br>근무<br>일수')}${H('③<br>연장<br>시급')}${H('④<br>연장<br>시간')}${H(`⑪<br>부가세(10%)<br>원천세(${rows.some(r => r.rec.taxType === 'daily') ? '3%·일용' : '3%'})`, ' class="pd-l"')}${H('⑫<br>주민세<br>(⑪×10%)')}${H('⑬<br>합계<br>(⑪+⑫)')}</tr></thead>
       <tbody>${body || '<tr><td colspan="17" class="c">-</td></tr>'}${sumRow('pd-tot', '합계', 3, rows)}</tbody></table></div>`;
+}
+/* 출근부 시트 (인건비 엑셀 · 12e 실비 청구 별첨 공통): 회사 양식처럼 구분(팀)별로 묶고 소계, 맨 아래 합계 · 요일 줄 · 주말 빨간 글씨 */
+function payAttSheet(ym, rows, title) {
+  const att = attOf(ym), days = Array.from({ length: daysIn(ym) }, (_, i) => i + 1), wk = d => weekday(ym, d), hol = d => (wk(d) === 0 || wk(d) === 6 ? 'c red' : 'c');
+  const teams = []; rows.forEach(r => { const k = r.s.team || ''; let t = teams.find(x => x.k === k); if (!t) teams.push(t = { k, list: [] }); t.list.push(r); });
+  const dayCnt = (list, d) => sum(list, r => attValue((att[r.s.id] || {})[d]));
+  const a3 = teams.flatMap(t => [...t.list.map((r, i) => [i === 0 ? { t: t.k, rs: t.list.length + 1, c: 'c' } : null, { t: i + 1, c: 'c' }, { t: r.s.name, c: 'c' }, ...days.map(d => ({ t: String((att[r.s.id] || {})[d] ?? ''), c: hol(d) })), attCount(att[r.s.id])].filter(x => x !== null)),
+    [{ t: '소계', cs: 2, c: 'c' }, ...days.map(d => ({ t: dayCnt(t.list, d) || '', c: 'c' })), sum(t.list, r => attCount(att[r.s.id]))]]);
+  a3.push([{ t: '합계', cs: 3, c: 'c' }, ...days.map(d => ({ t: dayCnt(rows, d) || '', c: 'c' })), sum(rows, r => attCount(att[r.s.id]))]);
+  return xtHtml({ title, land: true, widths: [40, 24, 56, ...days.map(() => 24), 34], head: [[{ t: '구분', cs: 2, rs: 2 }, { t: '성명', rs: 2 }, ...days.map(d => ({ t: d, c: hol(d) })), { t: '계', rs: 2 }], days.map(d => ({ t: WEEK[wk(d)], c: hol(d) }))], rows: a3 });
 }
 /* 인건비 엑셀: 자금청구서 · 지출결의서 · 세부내역 (인쇄 양식 그대로) + 출근부(구분별 소계·주말 빨간 글씨) · 집계표 · 지급 정보(본사 제출용) */
 async function exportPay() {
@@ -288,16 +301,9 @@ async function exportPay() {
     return row;
   });
   const tot = [{ t: '합계', cs: 2, c: 'c' }]; months.forEach(x => { const gs = payGroups(payRows(db.cur, x, false)); tot.push(sum(gs, g => g.ys), sum(gs, g => g.sh), sum(gs, g => g.ys + g.sh)); }); a2.push(tot);
-  // 출근부: 회사 양식처럼 구분(팀)별로 묶고 소계, 맨 아래 합계 · 요일 줄 · 주말 빨간 글씨
-  const att = attOf(ym), days = Array.from({ length: daysIn(ym) }, (_, i) => i + 1), wk = d => weekday(ym, d), hol = d => (wk(d) === 0 || wk(d) === 6 ? 'c red' : 'c');
-  const teams = []; rows.forEach(r => { const k = r.s.team || ''; let t = teams.find(x => x.k === k); if (!t) teams.push(t = { k, list: [] }); t.list.push(r); });
-  const dayCnt = (list, d) => sum(list, r => attValue((att[r.s.id] || {})[d]));
-  const a3 = teams.flatMap(t => [...t.list.map((r, i) => [i === 0 ? { t: t.k, rs: t.list.length + 1, c: 'c' } : null, { t: i + 1, c: 'c' }, { t: r.s.name, c: 'c' }, ...days.map(d => ({ t: String((att[r.s.id] || {})[d] ?? ''), c: hol(d) })), attCount(att[r.s.id])].filter(x => x !== null)),
-    [{ t: '소계', cs: 2, c: 'c' }, ...days.map(d => ({ t: dayCnt(t.list, d) || '', c: 'c' })), sum(t.list, r => attCount(att[r.s.id]))]]);
-  a3.push([{ t: '합계', cs: 3, c: 'c' }, ...days.map(d => ({ t: dayCnt(rows, d) || '', c: 'c' })), sum(rows, r => attCount(att[r.s.id]))]);
   const PH = ['구분', '성명', '업체명', '지급형태', '급여단가', '근무일수', '일할일수', '연장시급', '연장시간', '급여계', '식대단가', '식대일수', '식대계', '인센티브', '총급여액', '세금구분', '원천세/부가세', '주민세', '실지급액', '부담', '손익구분', '특이사항', '주민등록번호', '주소', '은행', '계좌번호'];
   await saveXl([['자금청구서', docPayClaim(ym, no, date)], ['지출결의서', payExpDoc(ym, date)], ['세부내역', docPayDetail(ym)],
-    ['출근부', xtHtml({ title: `${s.name}현장 출근부 (${monthNo(ym)}월)`, land: true, widths: [40, 24, 56, ...days.map(() => 24), 34], head: [[{ t: '구분', cs: 2, rs: 2 }, { t: '성명', rs: 2 }, ...days.map(d => ({ t: d, c: hol(d) })), { t: '계', rs: 2 }], days.map(d => ({ t: WEEK[wk(d)], c: hol(d) }))], rows: a3 })],
+    ['출근부', payAttSheet(ym, rows, `${s.name}현장 출근부 (${monthNo(ym)}월)`)],
     ['집계표', xtHtml({ title: `${s.name}현장 인건비 집계표`, land: months.length > 3, widths: [90, 120, ...months.flatMap(() => [84, 80, 88])], head: [[{ t: '업체명', rs: 2 }, { t: '구분', rs: 2 }, ...months.map(x => ({ t: `${monthNo(x)}월`, cs: 3 }))], months.flatMap(() => ['유성', '시행사', '실지급액 계'])], rows: a2 })],
     ['지급 정보(본사 제출용)', xtHtml({ title: `${s.name}현장 ${monthNo(ym)}월 인건비 지급 정보`, sub: '※ 주민등록번호·주소·계좌는 프로그램에 저장하지 않습니다. 이 시트에 직접 입력하거나 따로 받은 자료와 합쳐 보내세요.', land: true,
       widths: [60, 56, 84, 52, 76, 44, 44, 52, 44, 80, 56, 44, 66, 66, 84, 84, 76, 56, 84, 44, 90, 160, 110, 200, 60, 120], head: [PH], rows: a1 })]], fname('인건비'));

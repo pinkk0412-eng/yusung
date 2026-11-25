@@ -210,51 +210,26 @@ function viewHome() {
       <div class="setup-heading"><div><span class="eyebrow">처음 사용한다면</span><h2>먼저 기본 설정을 마쳐 주세요</h2><p>한 번 설정하면 이후 업무 입력과 정산에 계속 사용됩니다.</p></div><span class="setup-progress">${setupDone} / ${setupSteps.length} 완료</span></div>
       <div class="setup-steps">${setupSteps.map((x, i) => `<button class="setup-step ${x.done ? 'is-done' : ''}" data-act="goto" data-tab="settings" data-sub="${x.sub}"><span class="setup-number">${x.done ? '✓' : i + 1}</span><span><b>${x.label}</b><small>${x.hint}</small></span><span class="setup-arrow">${x.done ? '수정 →' : '설정 →'}</span></button>`).join('')}</div>
     </section>`;
-  const taskRow = t => {   // 일정 한 줄 (D-day · 남은 항목 · 완료 체크 · 바로가기)
-    const blockers = taskBlockers(db.cur, t.ym, t.key);
-    const done = isDone(db.cur, t.ym, t.key);
-    const cls = done ? 'done' : t.dday < 0 ? 'over' : t.dday <= 3 ? 'soon' : 'later';
-    const dtxt = done ? '완료' : t.dday === 0 ? 'D-DAY' : t.dday > 0 ? `D-${t.dday}` : `D+${-t.dday}`;
-    return `<div class="task"><span class="dday ${cls}">${dtxt}</span>
-        <div class="grow"><b>${esc(t.title)}</b> <span class="muted small">· 기한 ${t.due.getMonth() + 1}/${t.due.getDate()}(${WEEK[t.due.getDay()]}) · ${esc(t.desc)}</span><div class="chips small" style="margin-top:4px">${taskChecks(t).join(' ')}</div></div>
-        ${t.key === 'monthlyClose' ? `<span class="small muted">${done ? '마감됨' : '월결제 탭에서 마감'}</span>` : `<label class="small" title="${blockers.length ? `남은 항목: ${esc(blockers.join(', '))}` : ''}"><input type="checkbox" data-ch="done" data-ym="${t.ym}" data-key="${t.key}" ${done ? 'checked' : ''}> 완료${!done && blockers.length ? ` (남은 항목 ${blockers.length})` : ''}</label>`}
-        <button class="btn sm" data-act="goto" data-tab="${t.tab}" data-ym="${t.ym}">바로가기 →</button></div>`;
-  };
-  /* ---------- 달력: 정산 일정(기한 날짜) + 매일 출퇴근보고 ---------- */
+  /* ---------- 달력: 정산 일정(기한 날짜) · 일정을 누르면 완료 표시 (오른쪽 칸은 11/25 뺌 — 달력에 다 나옴) ---------- */
   const tStr = todayStr(), todayYm = tStr.slice(0, 7), day0 = d => new Date(d.getFullYear(), d.getMonth(), d.getDate()), T0 = day0(today);
   // 달력 = 상단바 작업월 (◀ ▶ · 오늘)
   const calYm = /^\d{4}-\d{2}$/.test(state.ym || '') ? state.ym : todayYm, [cy, cm] = calYm.split('-').map(Number), dim = daysIn(calYm);
   const tasksOf = ym => { const [y, m] = ym.split('-').map(Number); return homeTasks(new Date(y, m - 1, 1)).map(t => ({ ...t, dday: Math.round((day0(t.due) - T0) / 86400000) })); };
   const mTasks = tasksOf(calYm), dsOf = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
   const tCls = t => (isDone(db.cur, t.ym, t.key) ? 'done' : t.dday < 0 ? 'over' : t.dday <= 3 ? 'soon' : 'later');
-  const sel = state.homeDay && state.homeDay.slice(0, 7) === calYm ? state.homeDay : calYm === todayYm ? tStr : `${calYm}-01`;
-  const dOf = ds => new Date(+ds.slice(0, 4), +ds.slice(5, 7) - 1, +ds.slice(8, 10));
-  const repOf = ds => { const done = isDone(db.cur, ds.slice(0, 7), `rep${ds.slice(8)}`); return { done, show: ds <= tStr && (done || !isOffDay(dOf(ds), db.settings)) }; };   // 주말·공휴일은 보고했을 때만 표시
+  const evTip = t => { const b = taskBlockers(db.cur, t.ym, t.key), done = isDone(db.cur, t.ym, t.key);
+    return [t.title, t.desc, b.length && !done ? `남은 항목: ${b.join(', ')}` : '', t.key === 'monthlyClose' ? '누르면 월결제 탭으로 (마감은 그 탭에서)' : done ? '누르면 완료 취소' : '누르면 완료로 표시'].filter(Boolean).join('\n'); };
   let cal = '';
   const lead = new Date(cy, cm - 1, 1).getDay();
   for (let i = 0; i < lead; i++) cal += '<div class="cal-d cal-blank"></div>';
   for (let d = 1; d <= dim; d++) {
     const ds = `${calYm}-${pad2(d)}`, dow = (lead + d - 1) % 7, ts = mTasks.filter(t => dsOf(t.due) === ds), hn = holidayName(ds);
-    cal += `<div class="cal-d${dow === 0 || hn ? ' sun' : dow === 6 ? ' sat' : ''}${ds === tStr ? ' today' : ''}${ds === sel ? ' sel' : ''}" data-act="homeDay" data-d="${ds}" title="${[hn, ...ts.map(t => t.title)].filter(Boolean).map(esc).join('\n')}">
-        <div class="cal-n">${d}${hn ? ` <span class="cal-hol">${esc(hn)}</span>` : ''}</div>${ts.map(t => `<div class="cal-ev ${tCls(t)}">${esc(t.title)}</div>`).join('')}</div>`;
+    cal += `<div class="cal-d${dow === 0 || hn ? ' sun' : dow === 6 ? ' sat' : ''}${ds === tStr ? ' today' : ''}"${hn ? ` title="${esc(hn)}"` : ''}>
+        <div class="cal-n">${d}${hn ? ` <span class="cal-hol">${esc(hn)}</span>` : ''}</div>${ts.map(t => `<div class="cal-ev ${tCls(t)}" style="cursor:pointer" data-act="homeTaskDone" data-ym="${t.ym}" data-key="${t.key}" title="${esc(evTip(t))}">${esc(t.title)}</div>`).join('')}</div>`;
   }
   for (let i = (lead + dim) % 7; i > 0 && i < 7; i++) cal += '<div class="cal-d cal-blank"></div>';   // 마지막 주의 남는 칸도 빈 칸으로 채워 표 모양 유지
-  // 선택한 날: 그날 일정 · 출퇴근보고 · 밀린 일(지난달까지 기한이 지났는데 완료 안 한 것) · 다가오는 일정
-  const selD = dOf(sel), selTasks = mTasks.filter(t => dsOf(t.due) === sel), selRep = repOf(sel);
-  const overdue = [...tasksOf(ymAdd(todayYm, -1)), ...tasksOf(todayYm)].filter(t => t.dday < 0 && !isDone(db.cur, t.ym, t.key) && dsOf(t.due) !== sel
-    && (!s.startYm || t.ym >= s.startYm));   // 현장 시작월(설정 › 현장 정보) 이전 달의 일은 밀린 일로 세지 않음 — 새 현장에 지난 일이 쌓여 보이지 않게
-  const upcoming = mTasks.filter(t => dsOf(t.due) > sel && !isDone(db.cur, t.ym, t.key)).slice(0, 4);
-  const upLine = t => { const n = taskBlockers(db.cur, t.ym, t.key).length; return `<button class="cal-up" data-act="homeDay" data-d="${dsOf(t.due)}"><span class="cal-ev ${tCls(t)}">${t.due.getMonth() + 1}/${t.due.getDate()}</span><span class="grow">${esc(t.title)}</span>${n ? `<span class="muted small">남은 항목 ${n}</span>` : ''}</button>`; };
-  const repRow = sel <= tStr ? `<div class="task"><span class="dday ${selRep.done ? 'done' : sel < tStr ? 'over' : 'soon'}">${selRep.done ? '완료' : '매일'}</span><div class="grow"><b>출퇴근보고</b> <span class="muted small">· 경영지원에 출퇴근보고 (사진대체·정정 포함)</span></div>
-      <button class="btn sm ${selRep.done ? '' : 'primary'}" data-act="repToggle" data-ym="${sel.slice(0, 7)}" data-key="rep${sel.slice(8)}">${selRep.done ? '보고 취소' : '보고함'}</button>${sel === tStr ? '<button class="btn sm" data-act="repOpen" title="출근부(근태기록)로 카톡 보고 문구 만들기">보고문 만들기</button>' : ''}</div>` : '';
-  const dayPanel = `<div class="cal-side">
-      <div class="cal-side-h"><b>${selD.getMonth() + 1}월 ${selD.getDate()}일 (${WEEK[selD.getDay()]})</b>${sel === tStr ? ' <span class="badge ok">오늘</span>' : ''}</div>
-      <div class="tgroup"><div class="tg-h">이 날 할 일</div>${repRow}${selTasks.map(taskRow).join('') || (repRow ? '' : '<p class="muted small" style="margin:8px 2px">이 날 기한인 정산 일정이 없습니다.</p>')}</div>
-      ${overdue.length ? `<div class="tgroup"><div class="tg-h" style="color:var(--bad)">밀린 일 ${overdue.length}건 <span class="muted" style="font-weight:400">— 누르면 그 날로</span></div>${overdue.map(upLine).join('')}</div>` : ''}
-      ${upcoming.length ? `<div class="tgroup"><div class="tg-h">다가오는 일정</div>${upcoming.map(upLine).join('')}</div>` : ''}
-    </div>`;
-  const calPanel = `<div class="panel home-tasks"><div class="section-heading"><div><h2>업무 달력</h2><p>날짜를 누르면 할 일이 보입니다 · <span class="cal-ev done">완료</span> <span class="cal-ev soon">3일 안</span> <span class="cal-ev over">기한 지남</span> <span class="cal-ev later">예정</span></p></div></div>
-      <div class="cal-wrap"><div class="cal"><div class="cal-w sun">일</div><div class="cal-w">월</div><div class="cal-w">화</div><div class="cal-w">수</div><div class="cal-w">목</div><div class="cal-w">금</div><div class="cal-w sat">토</div>${cal}</div>${dayPanel}</div></div>`;
+  const calPanel = `<div class="panel home-tasks"><div class="section-heading"><div><h2>업무 달력</h2><p>일정을 누르면 완료로 표시됩니다 · <span class="cal-ev done">완료</span> <span class="cal-ev soon">3일 안</span> <span class="cal-ev over">기한 지남</span> <span class="cal-ev later">예정</span></p></div></div>
+      <div class="cal"><div class="cal-w sun">일</div><div class="cal-w">월</div><div class="cal-w">화</div><div class="cal-w">수</div><div class="cal-w">목</div><div class="cal-w">금</div><div class="cal-w sat">토</div>${cal}</div></div>`;
 
   // 품의서 결재 대기
   const pend = pmAll().filter(p => p.status === '작성중' || p.status === '결재중').sort((a, b) => toNum(a.no) - toNum(b.no));
@@ -265,29 +240,9 @@ function viewHome() {
   // 현장 철수 체크리스트 (철수 진행 중일 때)
   const cl = s.closing ? closeItems(s) : null, clDone = cl ? cl.filter(x => x.done).length : 0;
   const closeTask = cl ? `<div class="task"><span class="dday ${clDone === cl.length ? 'done' : 'soon'}">철수</span><div class="grow"><b>현장 철수 체크리스트 ${clDone}/${cl.length}</b> <span class="muted small">· 남은 일: ${esc(cl.filter(x => !x.done).slice(0, 6).map(x => x.label).join(', '))}${cl.length - clDone > 6 ? ' …' : ''}</span></div><button class="btn sm" data-act="goto" data-tab="settings" data-sub="close">바로가기 →</button></div>` : '';
-  const ym = state.ym, payCol = db.sites.some(x => isAdmin(x.id));   // 인건비 칸: 잠금 푼(또는 잠금 없는) 현장만 숫자
-  const rows = db.sites.map(si => {
-    const card = db.tx.filter(t => t.siteId === si.id && t.src === 'card' && txYm(t) === ym);
-    const cash = cashSummary(si.id, ym);
-    const mon = monthlyTotals(si.id, ym);
-    const unset = card.filter(t => !t.cat).length;
-    return `<tr><td><a href="#" data-act="switchSite" data-id="${si.id}">${esc(si.name)}</a></td>
-        <td class="num">${fmt(sum(card, t => t.amount))}</td><td class="center">${unset ? `<span class="badge warn">${unset}건</span>` : '<span class="badge ok">0</span>'}</td>
-        <td class="num">${fmt(cash.out)}</td><td class="num">${fmt(cash.balance)}</td>
-        <td class="num">${fmt(mon.total)}</td><td class="center">${mon.closed ? '<span class="badge ok">마감</span>' : '<span class="badge warn">작성중</span>'}</td>
-        ${payCol ? (isAdmin(si.id) ? `<td class="num">${fmt0(sum(payGroups(payRows(si.id, ym, false)), g => g.ys + g.sh))}</td>` : '<td class="center muted small">🔒</td>') : ''}
-        ${['card', 'cash'].map(src => { const c = issueCount(db.tx.filter(t => t.siteId === si.id && t.src === src && t.kind !== 'in' && txYm(t) === ym)); const n = sum(Object.values(c));
-        return `<td class="center small">${n ? `<span class="badge warn" title="${Object.entries(c).map(([k, v]) => `${ISSUE[k].label} ${v}`).join(' · ')}">${n}건</span>` : '<span class="badge ok">없음</span>'}</td>`; }).join('')}
-        <td class="center">${(() => { const n = pmAll(si.id).filter(p => p.status === '작성중' || p.status === '결재중').length; return n ? `<span class="badge warn">${n}건</span>` : '<span class="badge ok">없음</span>'; })()}</td></tr>`;
-  }).join('');
-
   return `
     <section class="home-hero"><div><span class="eyebrow">현장 업무 현황</span><h1>${esc(s.name)} 업무 홈</h1><p>오늘 할 일과 마감 일정</p></div></section>
     ${setupPanel}
     ${calPanel}
-    ${pmTask || closeTask || preTask ? `<div class="panel home-tasks"><div class="tgroup"><div class="tg-h">품의 · 철수</div>${preTask}${pmTask}${closeTask}</div></div>` : ''}
-    <div class="panel home-overview"><div class="section-heading"><div><h2>현장별 정산 현황</h2><p>각 현장의 이번 달 주요 금액과 남은 업무입니다.</p></div><span class="today-date">${ymLabel(ym)}</span></div>
-      <div class="tbl-wrap"><table class="t"><thead><tr><th>현장</th><th>법인카드 합계</th><th>미분류</th><th>전도금 사용</th><th>전도금 잔액</th><th>월결제 합계</th><th>월결제</th>${payCol ? '<th>인건비 실지급</th>' : ''}<th title="미분류·사용내역 없음·영수증 없음">카드 남은 일</th><th title="미분류·사용내역 없음·영수증 없음">전도금 남은 일</th><th>품의 결재 대기</th></tr></thead>
-      <tbody>${rows}</tbody></table></div>
-    </div>`;
+    ${pmTask || closeTask || preTask ? `<div class="panel home-tasks"><div class="tgroup"><div class="tg-h">품의 · 철수</div>${preTask}${pmTask}${closeTask}</div></div>` : ''}`;
 }

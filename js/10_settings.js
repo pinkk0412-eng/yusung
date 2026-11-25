@@ -39,7 +39,12 @@ function settingsHtml() {
         <label>캐터링 중식 기본 단가<input class="num" value="${fmt0(s.cateringLunch)}" data-ch="site" data-f="cateringLunch" data-num="1" data-fid="s_cl"></label>
         <label title="현장 손익의 분양률 계산에 씀">총 세대수<input class="num" value="${fmt0(s.totalUnits)}" data-ch="site" data-f="totalUnits" data-num="1" data-fid="s_tu" placeholder="960"></label>
         <label class="small" style="align-self:end" title="끄면 법인카드 내역의 청구 칸을 숨김"><input type="checkbox" data-ch="site" data-f="claimOn" ${claimOn() ? 'checked' : ''}> 시행사 청구 적용</label>
+        <label title="시행사·신탁사가 수수료 청구액(부가세 포함)에서 떼고 주는 비율 — 매출 청구 차수형 수수료의 기본값 (비우면 0%)">유보율 % (매출 청구)<input class="num" value="${esc(s.retainRate ?? '')}" data-ch="site" data-f="retainRate" data-fid="s_rr" placeholder="0"></label>
       </div>
+      <h3>분양대행수수료 청구공문 <span class="muted small">— 매출 청구 [+ 수수료 청구 (차수형)]의 공문에 들어감</span></h3>
+      <div class="form-grid">${(() => { const d = s.feeDoc || {}, g = (label, k, ph, span) => `<label${span ? ' style="grid-column:span 2"' : ''}>${label}<input value="${esc(d[k] ?? '')}" data-ch="feeDoc" data-f="${k}" data-fid="fd_${k}" placeholder="${esc(ph)}"></label>`;
+        return g('수신', 'recv', '○○신탁 주식회사') + g('참조', 'cc', '○○ 담당자') + g('제목 앞부분', 'title', `${s.fullName || '○○'} 공동주택`) + g('입금계좌', 'account', '○○은행 000-000000-00-000 (예금주)')
+          + g('계약서 근거 조항', 'clause', '분양대행 용역계약서 제○조(용역대금의 지급)', true) + g('첨부서류 (쉼표로 구분)', 'attach', FEE_ATTACH, true); })()}</div>
       <h3>결재라인</h3>
       <div class="form-grid">${s.approvers.map((a, i) => `<label>${i + 1}번 칸<span class="row"><input style="width:92px" value="${esc(a.title)}" data-ch="appr" data-i="${i}" data-f="title" data-fid="ap_t${i}"><input class="grow" value="${esc(a.name)}" placeholder="직책/이름" data-ch="appr" data-i="${i}" data-f="name" data-fid="ap_n${i}"></span></label>`).join('')}</div>
       <div class="row" style="margin-top:8px"><button class="btn sm" data-act="apprAdd">+ 결재칸 추가</button>${s.approvers.length > 1 ? '<button class="btn sm" data-act="apprDel">− 마지막 칸 삭제</button>' : ''}</div>
@@ -80,7 +85,13 @@ function settingsHtml() {
         <label title="휴일이면 그 다음 영업일">자금집행일 ② (월결제 등 · 휴일이면 다음 영업일)<input type="number" min="1" max="31" value="${st.monthlyPay}" data-ch="setting" data-f="monthlyPay"></label>
       </div>
       <p class="muted small" style="margin:6px 0 0">공휴일 2025~2028년 포함 · 이번 달 자금집행일 <b>${mdw(payFundDay(todayStr().slice(0, 7), st))}</b> · <b>${mdw(monthlyFundDay(todayStr().slice(0, 7), st))}</b> · 다음 달: ${mdw(payFundDay(ymAdd(todayStr().slice(0, 7), 1), st))} · ${mdw(monthlyFundDay(ymAdd(todayStr().slice(0, 7), 1), st))}</p>
-      <div class="form-grid" style="margin-top:10px"><label style="grid-column:span 2">직원 구분 정렬 순서 (쉼표로 구분, 적지 않은 구분은 뒤에)<input value="${esc(st.teamOrder ?? DEFAULT_TEAM_ORDER)}" data-ch="setting" data-f="teamOrder" data-fid="teamOrder" placeholder="${DEFAULT_TEAM_ORDER}"></label></div></div>
+      <div class="form-grid" style="margin-top:10px"><label style="grid-column:span 2">직원 구분 정렬 순서 (쉼표로 구분, 적지 않은 구분은 뒤에)<input value="${esc(st.teamOrder ?? DEFAULT_TEAM_ORDER)}" data-ch="setting" data-f="teamOrder" data-fid="teamOrder" placeholder="${DEFAULT_TEAM_ORDER}"></label></div>
+      <h3>원천세 (인건비) <span class="small" style="color:var(--bad)">— 세무 확인 필요: 아래는 기본값이며 회사 세무 담당 확인 후 고치세요</span></h3>
+      ${(() => { const t = st.tax || {}, o = taxOpt(t), n = (label, k, tip) => `<label title="${esc(tip)}">${label}<input class="num" value="${esc(t[k] ?? '')}" placeholder="${fmt(TAX_DEF[k])}" data-ch="taxSet" data-f="${k}" data-fid="tx_${k}"></label>`;
+        return `<div class="form-grid">
+        <label class="small" style="align-self:end" title="원천징수할 소득세가 1,000원 미만이면 소득세·지방소득세를 떼지 않음 (사업소득 3.3% · 일용근로 · 그 달 합계 기준)"><input type="checkbox" data-ch="taxSet" data-f="minOn" ${o.minOn ? 'checked' : ''}> 소액부징수 (소득세 1,000원 미만 → 0)</label>
+        ${n('일용근로 하루 공제액 (원)', 'dDed', '비우면 150,000')}${n('일용근로 세율 (%)', 'dRate', '비우면 6')}${n('일용근로 세액공제 (%)', 'dCredit', '비우면 55')}</div>
+        <p class="muted small" style="margin:6px 0 0">일용근로소득 = 하루씩 (일급 + 그날 연장 − 공제액) × 세율 × (1 − 세액공제), 10원 미만 절사 · 지방소득세 = 소득세 × 10% · 식대는 비과세로 빼고, 인센티브는 공제 없이 금액 × 세율 × (1 − 세액공제) · 사업소득 3.3% 계산은 그대로</p>`; })()}</div>
 
 
 <!--S:ai-->

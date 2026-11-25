@@ -2,7 +2,7 @@
  * 데이터: 선택한 "데이터 폴더" 안에 현장별 폴더 (A. 기안품의 / B. 자금관련/YY년 MM월 서류철 …) 에 저장
  */
 'use strict';
-const APP_VERSION = '2026.11.16';   // 배포 만들기.bat 이 만들 때 날짜로 바꿈
+const APP_VERSION = '2026.11.25-2';   // 배포 만들기.bat 이 만들 때 날짜로 바꿈
 
 /* ================= 기본 상수 ================= */
 const CATS = [
@@ -95,6 +95,9 @@ function parseDateCell(v, refYm) {
   const s = String(v).normalize('NFKC').trim().replace(/\s+/g, ' ');
   let m = s.match(/^(\d{4})\s*[-./년]\s*(\d{1,2})\s*[-./월]\s*(\d{1,2})일?(?:[ T]+(\d{1,2}):(\d{2}))?/);
   if (m) return mk(+m[1], +m[2], +m[3], m[4], m[5]);
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/);   // 엑셀 영문 날짜 표시 (월/일/연 1/31/26) — 연/월/일(25/10/21)로도 되면 기준 연도에 가까운 쪽
+  if (m) { const yy = +m[3] < 100 ? 2000 + +m[3] : +m[3], us = mk(yy, +m[1], +m[2]), ko = m[1].length === 2 && m[3].length === 2 ? mk(2000 + +m[1], +m[2], +m[3]) : null;
+    if (us && (!ko || Math.abs(yy - refY) <= Math.abs(2000 + +m[1] - refY))) return us; if (ko) return ko; }
   m = s.match(/^(\d{2})[-./](\d{1,2})[-./](\d{1,2})(?:[ T]+(\d{1,2}):(\d{2}))?$/);
   if (m) return mk(2000 + +m[1], +m[2], +m[3], m[4], m[5]);
   m = s.match(/^(\d{4})(\d{2})(\d{2})$/);
@@ -454,7 +457,16 @@ function buildTasks(today, settings) {
 
 /* ================= 인건비 계산 ================= */
 const PAY_TYPES = ['일급', '월급', '제외'];
-const TAX_TYPES = { '3.3': '사업소득 3.3%', 'vat': '부가세 10% 별도', 'none': '공제 없음' };
+const TAX_TYPES = { '3.3': '사업소득 3.3%', 'daily': '일용근로소득', 'vat': '부가세 10% 별도', 'none': '공제 없음' };
+/* 원천세 설정 (db.settings.tax · 세무 담당 확인 전 기본값) — minOn: 소액부징수(소득세 1,000원 미만 → 0, 월 합계 기준)
+ * 일용근로: 하루 (일급 + 그날 연장 − 공제액 dDed) × 세율 dRate% × (1 − 세액공제 dCredit%), 10원 미만 절사 · 식대는 비과세로 뺌 · 인센티브는 공제 없이 금액 × 세율 × (1 − 세액공제) */
+const TAX_DEF = { minOn: true, dDed: 150000, dRate: 6, dCredit: 55 };
+const taxOpt = t => { const o = { ...TAX_DEF }; Object.keys(TAX_DEF).forEach(k => { const v = (t || {})[k]; if (v !== undefined && v !== '' && v !== null) o[k] = k === 'minOn' ? !!v : toNum(v); }); return o; };
+const floor10 = v => Math.floor(Math.round(v * 100) / 100 / 10) * 10;   // 10원 미만 절사 (0.1+0.2 같은 소수 오차 방지)
+function dailyTax(amt, o, noDed) {   // 일용근로 하루(또는 인센티브) 소득세·지방소득세
+  const tax = floor10(Math.max(0, amt - (noDed ? 0 : o.dDed)) * o.dRate / 100 * (1 - o.dCredit / 100));
+  return { tax, local: floor10(tax * 0.1) };
+}
 const PL_GROUPS = ['유성 정직원', '기획계약직', '경리', '상담사/TM', '도우미/경호', '아르바이트/홍보단/미화'];
 const PAY_FIELDS = ['company', 'payType', 'rate', 'otRate', 'mealRate', 'taxType', 'payer', 'plGroup'];
 function guessPlGroup(team) {
@@ -468,8 +480,9 @@ function guessPlGroup(team) {
 /* 달 중간 단가 변경: rec.chg = { day, payType, rate } → 1일~(day-1)일은 rec.payType·rate, day일~말일은 chg 값으로 나눠 계산
  * 일급 부분 = 그 기간 출근일 × 일급, 월급 부분 = 월급 × 그 기간 일수 / 그 달 일수 (달력 일수 기준) */
 const payChg = (rec, dim) => { const c = rec && rec.chg; return c && toNum(c.day) >= 2 && toNum(c.day) <= dim && ['일급', '월급'].includes(c.payType) ? c : null; };
-/* rec: 월별 인건비 기록, dim: 그 달 일수, attDays: 출근부 출근일수, attSplit: 변경일 앞·뒤 출근일수 { before, after } (단가 변경이 있을 때) */
-function payCalc(rec, dim, attDays, autoOt, attSplit) {
+/* rec: 월별 인건비 기록, dim: 그 달 일수, attDays: 출근부 출근일수, attSplit: 변경일 앞·뒤 출근일수 { before, after } (단가 변경이 있을 때)
+ * ext: { tax: db.settings.tax, days: [{ v(출근 1·0.5), ot(그날 연장시간) }] — 일용근로 하루씩 계산용 } */
+function payCalc(rec, dim, attDays, autoOt, attSplit, ext = {}) {
   const workDays = rec.workDays === null || rec.workDays === undefined || rec.workDays === '' ? attDays : toNum(rec.workDays);
   const prorate = rec.prorate === null || rec.prorate === undefined || rec.prorate === '' ? dim : toNum(rec.prorate);
   let base = 0, split = null;
@@ -488,10 +501,136 @@ function payCalc(rec, dim, attDays, autoOt, attSplit) {
   const mealDays = rec.mealDays === null || rec.mealDays === undefined || rec.mealDays === '' ? (toNum(rec.mealRate) < 0 ? workDays : 0) : toNum(rec.mealDays);
   const meal = toNum(rec.mealRate) * mealDays;
   const gross = pay + meal + toNum(rec.incentive);
-  let tax = 0, local = 0, net = gross;
-  if (rec.taxType === '3.3') { tax = Math.floor(gross * 0.03 / 10) * 10; local = Math.floor(tax * 0.1 / 10) * 10; net = gross - tax - local; }
+  let tax = 0, local = 0, net = gross, small = false;
+  const T = taxOpt(ext.tax);
+  if (rec.taxType === '3.3') { tax = Math.floor(gross * 0.03 / 10) * 10; local = Math.floor(tax * 0.1 / 10) * 10; }
+  else if (rec.taxType === 'daily') ({ tax, local } = payDailyTax(rec, { workDays, base, ot, pay, chg, days: ext.days }, T));
   else if (rec.taxType === 'vat') { tax = Math.round(gross / 10); net = gross + tax; }
-  return { workDays, prorate, otHours, mealDays, base, ot, pay, meal, gross, tax, local, net, split };
+  if (rec.taxType === '3.3' || rec.taxType === 'daily') {
+    if (T.minOn && tax > 0 && tax < 1000) { tax = 0; local = 0; small = true; }   // 소액부징수 (월 합계 소득세)
+    net = gross - tax - local;
+  }
+  return { workDays, prorate, otHours, mealDays, base, ot, pay, meal, gross, tax, local, net, split, small };
+}
+/* 일용근로 원천세: 일급이고 출근부대로 계산한 달 = 출근한 날마다 (일급 × 출근값 + 그날 연장수당)
+ * 그 밖(월급 · 근무일수를 직접 넣음 · 달 중간 단가 변경) = 급여계 ÷ 근무일수 를 하루치로 똑같이 · 연장시간을 직접 넣었으면 연장수당은 출근일에 똑같이 나눔 */
+function payDailyTax(rec, x, T) {
+  let tax = 0, local = 0;
+  const add = r => { tax += r.tax; local += r.local; };
+  const days = (x.days || []).filter(d => toNum(d.v) > 0 || toNum(d.ot) > 0);
+  const byAtt = rec.payType === '일급' && !x.chg && (rec.workDays === null || rec.workDays === undefined || rec.workDays === '') && days.length;
+  if (byAtt) {
+    const otMan = !(rec.otHours === null || rec.otHours === undefined || rec.otHours === '');
+    days.forEach(d => add(dailyTax(toNum(rec.rate) * toNum(d.v) + (otMan ? x.ot / days.length : toNum(rec.otRate) * toNum(d.ot)), T)));
+  } else if (x.pay > 0) {
+    const n = Math.max(1, Math.ceil(toNum(x.workDays)));   // 0.5일도 하루
+    for (let i = 0; i < n; i++) add(dailyTax(x.pay / n, T));
+  }
+  if (toNum(rec.incentive) > 0) add(dailyTax(toNum(rec.incentive), T, true));
+  return { tax, local };
+}
+
+/* ================= 차수형 (조직 지급 품의 14b · 분양대행수수료 청구 12d 공통) =================
+ * records = 다른 차수들 [{ r(차수), src(어디서), units: [{ key(동호수), amt }] }] → 이미 지급·청구한 세대 (중복 경고 · 전회·누계) */
+const unitKey = v => String(v || '').replace(/\s/g, '');
+const RND_TOT = /^(계|소계|부가세|합계|합\s*계|총계|VAT)$/;
+/* 붙여넣은 세대 목록 (엑셀 복사, 탭 구분) → [{ dong, type, date, … }]. 머리글 줄이 있으면 열 이름으로, 없으면 아래 순서 */
+const UNIT_FIELDS = [['dong', /동\s*호|호수/], ['type', /타입|평형/], ['date', /계약\s*일/], ['buyer', /계약자|고객|성명/], ['chief', /총괄/], ['hq', /본부/], ['team', /팀/],
+  ['agent', /담당|판매자|직원/], ['paid2', /2차|입금/], ['status', /상태|해지|보류/], ['memo', /비고|사유|메모/], ['done', /완납/]];
+const unitDate = (v, refYm) => { const x = parseDateCell(String(v || '').trim(), refYm); return x ? x.date : ''; };   // refYm = 지급 기간 시작 달 (연도 없는 "1/31" → 그 해)
+/* 엑셀에서 복사한 글(탭·줄) → 칸 배열. 칸 안 줄바꿈(Alt+Enter)이 있으면 엑셀이 "…" 로 감싸 줌 ("" = 따옴표) — 15 품의서 표 붙여넣기도 같이 씀 */
+function tsvGrid(text) {
+  const s = String(text || '').replace(/\r\n?/g, '\n'), rows = [[]]; let v = '', q = false, start = true;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (q) { if (ch === '"') { if (s[i + 1] === '"') { v += '"'; i++; } else q = false; } else v += ch; continue; }
+    if (ch === '"' && start) { q = true; start = false; continue; }
+    if (ch === '\t' || ch === '\n') { rows[rows.length - 1].push(v); v = ''; start = true; if (ch === '\n') rows.push([]); continue; }
+    v += ch; start = false;
+  }
+  rows[rows.length - 1].push(v);
+  const out = rows.map(r => r.map(x => x.split('\n').map(l => l.trim()).join('\n').trim()));
+  while (out.length && out[out.length - 1].every(x => !x)) out.pop();
+  return out;
+}
+function rndParseUnits(text, refYm) {
+  const lines = tsvGrid(text).map(c => c.map(x => x.replace(/\n/g, ' '))).filter(c => c.some(Boolean));
+  if (!lines.length) return [];
+  let map = UNIT_FIELDS.map(f => f[0]);
+  const isHead = h => h && !/^[\d\s,.\-\/:]+$/.test(h) && !/^\d+-\d+/.test(h);   // 날짜·숫자·동호수(101-1203) 칸은 머리글 아님
+  const dataLike = row => row.some(h => /^\d+-\d+$/.test(h) || parseDateCell(h));
+  if (!dataLike(lines[0]) && lines[0].filter(h => isHead(h) && UNIT_FIELDS.some(f => f[1].test(h))).length >= 2) {
+    let head = lines.shift();
+    // 두 줄 머리글 (회사 판매내역 시트: "판매자" 아래 총괄·본부·팀·담당자, "2차계약금" 아래 입금일) → 열마다 위·아래 이름을 이어 붙임
+    if (lines.length && !dataLike(lines[0]) && lines[0].some(Boolean) && lines[0].every(h => !h || isHead(h))) { const h2 = lines.shift(); head = head.map((h, j) => [h, h2[j]].filter(Boolean).join(' ')).concat(h2.slice(head.length)); }
+    const used = new Set(); map = head.map(h => { const f = isHead(h) && UNIT_FIELDS.find(x => !used.has(x[0]) && x[1].test(h)); if (f) used.add(f[0]); return f ? f[0] : null; });
+  }
+  return lines.map(cells => {
+    const o = {}; map.forEach((k, j) => { if (k && cells[j]) o[k] = cells[j]; });
+    ['date', 'paid2', 'done'].forEach(k => { if (o[k]) o[k] = unitDate(o[k], refYm) || o[k]; });
+    const st = `${o.status || ''} ${o.memo || ''}`;
+    o.status = /해지|취소/.test(st) ? '해지' : /보류/.test(st) ? '보류' : '';
+    return o;
+  }).filter(o => unitKey(o.dong) && !RND_TOT.test(o.dong));
+}
+function rndPaidMap(records) {   // 동호수 → { r, amt, src }
+  const m = new Map();
+  (records || []).forEach(p => (p.units || []).forEach(x => m.set(x.key, { r: toNum(p.r), amt: x.amt, src: p.src })));
+  return m;
+}
+function rndUnits(units, paid) {   // 붙여넣은 세대 → 이번 대상(pay) · 보류(hold) · 이미 다른 차수에 있음(dup, 뺌) · 해지는 뺌
+  const all = (units || []).filter(u => u.status !== '해지');
+  const dup = all.filter(u => paid.has(unitKey(u.dong))), rest = all.filter(u => !paid.has(unitKey(u.dong)));
+  return { all, dup, pay: rest.filter(u => u.status !== '보류'), hold: rest.filter(u => u.status === '보류') };
+}
+function rndPeriod(ym, half) {   // 반달: 1 = 1~15일 · 2 = 16~말일
+  const last = new Date(+ym.slice(0, 4), monthNo(ym), 0).getDate();
+  return +half === 1 ? { from: `${ym}-01`, to: `${ym}-15` } : { from: `${ym}-16`, to: `${ym}-${pad2(last)}` };
+}
+const rndAddDay = (d, n) => { const x = new Date(`${d}T00:00:00Z`); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
+function rndHalfOf(from) {   // 시작일이 1일 → 15일까지 · 16일 → 말일까지 (15일·말일 마감)
+  const ym = from.slice(0, 7), d = +from.slice(8, 10);
+  return d === 1 ? rndPeriod(ym, 1) : d === 16 ? rndPeriod(ym, 2) : null;
+}
+// 다음 차수 기간: 지난 차수(last = { from, to }) 다음 날부터 · 없으면 오늘 기준 (1~5일 = 지난달 16~말일 · 6~20일 = 이번 달 1~15일 · 21일~ = 이번 달 16~말일)
+function rndNextPeriod(last, today = todayStr()) {
+  if (last && /^\d{4}-\d{2}-\d{2}$/.test(last.to || '')) {
+    const from = rndAddDay(last.to, 1), h = rndHalfOf(from);
+    if (h) return h;
+    const len = Math.round((new Date(last.to) - new Date(last.from)) / 864e5) || 0;
+    return { from, to: rndAddDay(from, Math.max(0, len)) };
+  }
+  const d = +today.slice(8, 10), ym = today.slice(0, 7);
+  return d <= 5 ? rndPeriod(ymAdd(ym, -1), 2) : rndPeriod(ym, d <= 20 ? 1 : 2);
+}
+/* 분양대행수수료 청구 (12d): 줄 = 항목 + 청구 기준. 유보금 = (공급가 + 부가세) × 유보율, 원 단위 반올림 */
+const feeRet = (amt, rate) => Math.round((toNum(amt) + Math.round(toNum(amt) * 0.1)) * toNum(rate) / 100);
+const feeKey = l => `${l.item || ''}|${l.basis || ''}`;
+const feeRate = l => (String(l.rate ?? '').trim() !== '' ? toNum(l.rate) : Math.round(toNum(l.base) * toNum(l.pct) / 100));   // 세대당 = 직접 입력 또는 기본 수수료 × 비율
+/* f = 이번 차수 { round, lines, raw(기준별 붙여넣은 글), adj(수동 보정), retainRate } · others = 다른 차수 fee 기록들 (저장된 줄의 n·amt·ret·keys 를 그대로 씀 — 다시 계산하지 않음)
+ * 전회 = 앞 차수 금회 합 + (앞 차수와 이번 차수의) 수동 보정 · 누계 = 전회 + 금회 */
+function feeCalc(f, others) {
+  const rr = toNum(f.retainRate), round = toNum(f.round);
+  const prevF = (others || []).filter(o => toNum(o.round) < round);
+  const adjAll = [...prevF.flatMap(o => o.adj || []), ...(f.adj || [])];
+  const unitsOf = {}; Object.entries(f.raw || {}).forEach(([b, t]) => { unitsOf[b] = rndParseUnits(t); });
+  const lines = (f.lines || []).filter(l => l.item || l.basis).map(l => {
+    const key = feeKey(l), rate = feeRate(l);
+    const recs = (others || []).map(o => { const x = (o.lines || []).find(y => feeKey(y) === key); return x ? { r: o.round, src: `${o.round}차`, units: (x.keys || []).map(k => ({ key: k, amt: x.rate })) } : null; }).filter(Boolean);
+    const paid = rndPaidMap(recs), u = rndUnits(unitsOf[l.basis] || [], paid);
+    const amt = u.pay.length * rate;
+    const cur = { n: u.pay.length, amt, ret: l.retain ? feeRet(amt, rr) : 0 };
+    const pl = prevF.map(o => (o.lines || []).find(y => feeKey(y) === key)).filter(Boolean), pa = adjAll.filter(a => a.key === key);
+    const adjRet = a => (String(a.ret ?? '').trim() !== '' ? toNum(a.ret) : l.retain ? feeRet(a.amt, rr) : 0);
+    const prev = { n: sum(pl, x => x.n) + sum(pa, a => a.n), amt: sum(pl, x => x.amt) + sum(pa, a => a.amt), ret: sum(pl, x => x.ret) + sum(pa, adjRet) };
+    return { ...l, rateIn: l.rate, key, rate, cur, prev, cum: { n: prev.n + cur.n, amt: prev.amt + cur.amt, ret: prev.ret + cur.ret }, pay: u.pay, hold: u.hold, dup: u.dup, paid, keys: u.pay.map(x => unitKey(x.dong)) };
+  });
+  const tot = w => { const amt = sum(lines, l => l[w].amt), vat = Math.round(amt * 0.1), ret = sum(lines, l => l[w].ret); return { amt, vat, total: amt + vat, ret, expect: amt + vat - ret }; };
+  // 전회 기간 = 첫 차수(또는 보정) 시작일 ~ 지난 차수(또는 보정) 종료일
+  const ds = [...prevF.map(o => ({ from: o.from, to: o.to })), ...adjAll.map(a => ({ from: a.from, to: a.to }))];
+  const fr = ds.map(d => d.from).filter(Boolean).sort(), to = ds.map(d => d.to).filter(Boolean).sort();
+  const bases = [...new Set(lines.map(l => l.basis))].map(b => { const ls = lines.filter(l => l.basis === b); return { basis: b, cur: Math.max(0, ...ls.map(l => l.cur.n)), prev: Math.max(0, ...ls.map(l => l.prev.n)), units: unitsOf[b] || [] }; });
+  return { lines, cur: tot('cur'), prev: tot('prev'), cum: tot('cum'), pp: { from: fr[0] || '', to: to[to.length - 1] || '' }, bases, rr };
 }
 
 /* ================= 근태기록(얼굴인식 출근) 파싱 ================= */
@@ -576,5 +715,5 @@ function attValue(v) { const s = String(v ?? '').trim(); if (/^\d+(\.\d+)?$/.tes
 
 /* ================= 노드 테스트용 내보내기 ================= */
 if (typeof module !== 'undefined') {
-  module.exports = { stripBizNo, memoRuleWarnings,attValue, parseDateCell, parseCardSheet, detectColumns, parseMeal, splitTop, numKor, guessCat, merchantKey, cleanMerchant, normCat, buildTasks, ymAdd, payCalc, guessPlGroup, parseAttendanceSheet, cleanPersonName, parseReceiptText, receiptScore, cardYm, labelYm, parseAttGrid, parseMemoRules, applyMemoRule, mealRateFor, parseRateRules };
+  module.exports = { stripBizNo, memoRuleWarnings,attValue, parseDateCell, parseCardSheet, detectColumns, parseMeal, splitTop, numKor, guessCat, merchantKey, cleanMerchant, normCat, buildTasks, ymAdd, payCalc, guessPlGroup, parseAttendanceSheet, cleanPersonName, parseReceiptText, receiptScore, cardYm, labelYm, parseAttGrid, parseMemoRules, applyMemoRule, mealRateFor, parseRateRules, taxOpt, tsvGrid, rndParseUnits, rndPaidMap, rndUnits, rndNextPeriod, feeCalc, feeRet };
 }

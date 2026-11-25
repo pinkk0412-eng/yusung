@@ -72,6 +72,8 @@ const PM_TPL = [
 ];
 ['vendor', 'setup', 'kt', 'crm', 'sms', 'fuel', 'cater', 'rent'].forEach(id => { const t = PM_TPL.find(x => x.id === id); if (t) t.compare = true; });   // 업체 섭외 = 비교견적 3곳 (경영지원 요청)
 ['rent', 'rate'].forEach(id => { const t = PM_TPL.find(x => x.id === id); if (t) t.hidden = true; });   // 새 품의 목록에서 숨김 — rent 는 에메트 견적서로 작성(15 pmEmetNew), rate 는 채용 창에서 "직종별" 선택으로 씀
+// 지출결의서 없이 올리는 양식 (영종 샘플: 채용·단가 = 인건비로, 업체 섭외·집기 임차 = 월결제로, 오픈기간 카드 = 법인카드로 지급) → "지출결의서 같이 올림" 기본 꺼짐 (켜 두면 손익에도 두 번 잡힘)
+['hire', 'rate', 'vendor', 'rent', 'opencard'].forEach(id => { const t = PM_TPL.find(x => x.id === id); if (t) t.noExp = true; });
 const pmTpl = id => PM_TPL.find(x => x.id === id);
 // 오픈기간 법인카드 품의 ↔ 법인카드 사용내역 (사용기간·카드 기준, 카드 화면 비교와 같은 범위)
 const pmCardTx = it => { const to = it.useTo || it.useFrom, cards = it.useCards || []; return it.useFrom ? db.tx.filter(t => t.siteId === db.cur && t.src === 'card' && t.kind !== 'in' && t.date >= it.useFrom && t.date <= to && (!cards.length || cards.includes(t.card))).sort((a, b) => String(a.date).localeCompare(String(b.date))) : []; };
@@ -109,6 +111,7 @@ function pmPrintWarns(it) {   // 인쇄 전에 확인: 후품의 사유 · 첨�
   }
   w.push(...orgPrintWarns(it));   // 조직 지급: 이미 지급된 세대 (14b)
   w.push(...pmExpWarns(it));   // 지출결의서 업체별 나누기 (15)
+  if (!it.noExpense && !it.org && !pmAmount(it)) w.push('품의 금액이 0원입니다 — 같이 인쇄되는 지출결의서 금액이 비어 나갑니다. 작성 창 "품의 금액"을 적거나 세부내역 표 금액 열 이름에 (금회)를 붙이세요');
   return w;
 }
 const PM_LINK = { staff: '직원 등록·단가 반영', rate: '인건비 단가로 반영', vendor: '월결제 거래처로 등록' };
@@ -140,7 +143,7 @@ const pmCmpVendors = b => [...new Set((b.cols || []).filter(c => String(c).inclu
 function pmFromTpl(tp, over) {
   const s = site(), S = s.fullName || s.name, base = pmNew(over);
   if (!tp || !tp.body) return base;   // 이름표만 남긴 예전 양식(body 없음)은 빈 양식으로
-  const it = Object.assign(base, { tpl: tp.id, title: base.title || tp.title, vendor: base.vendor || tp.vendor || '', payMethod: tp.payMethod || base.payMethod, payDate: base.payDate || tp.payDate || '', claim: '불가', budget: '예산 심의 전' }, over || {});
+  const it = Object.assign(base, { tpl: tp.id, title: base.title || tp.title, vendor: base.vendor || tp.vendor || '', payMethod: tp.payMethod || base.payMethod, payDate: base.payDate || tp.payDate || '', claim: '불가', budget: '예산 심의 전', ...(tp.noExp ? { noExpense: true } : {}) }, over || {});
   // 3칸만: 1. 내용(기타사항은 ※ 줄로 끝에) · 2. 세부내역 · 3. 첨부서류 — 신규업체 등록사항 표는 사업자등록증 첨부로 대신 (상무님 요청)
   const etc = (tp.etc || []).map(l => l.trim()).filter(l => l.replace(/^(?:-|※|[가-하]\.)\s*/, '').trim());
   const etcL = tp.etcTitle ? (etc.length ? [`※ ${tp.etcTitle}`, ...etc.map(l => '  ' + l)] : []) : etc.map(l => '※ ' + l.replace(/^(?:-|※|[가-하]\.)\s*/, ''));
@@ -264,7 +267,12 @@ function pmDocNoFor(kind, ym, date) {   // 자금청구서 인쇄창 기본 문�
 const pmDetailTotal = d => {   // 대장 금액: "(금회)" 열 → 없으면 누계·단가를 뺀 마지막 금액 열
   if (!d || !d.cols) return 0;
   let ci = d.cols.findIndex(c => /금회/.test(c));
-  if (ci < 0) { const c2 = d.cols.map((c, j) => [c, j]).filter(([c]) => /금액|합계|청구/.test(c) && !/누계|단가/.test(c)); ci = c2.length ? c2[c2.length - 1][1] : -1; }
+  const has = j => (d.rows || []).some(r => toNum(r[j]));   // 값이 있는 열 (전기요금 1월·2월·3월 표에서 아직 빈 2월·3월은 건너뜀)
+  const lastOf = re => { const c2 = d.cols.map((c, j) => [String(c || ''), j]).filter(([c]) => re.test(c) && !/누계|단가/.test(c)), v = c2.filter(([, j]) => has(j)); return v.length ? v[v.length - 1][1] : c2.length ? c2[c2.length - 1][1] : -1; };
+  if (ci < 0) ci = lastOf(/금액|합계|청구/);
+  if (ci < 0) ci = lastOf(/최종|확정/);   // 협의 단계별 표 (최초 0.9% · 변경 0.7% · 최종 0.5%) = 최종 열
+  if (ci < 0) ci = lastOf(/\d+\s*(월|차)/);   // 월별·회차별 표 (수도요금 4월·5월·6월 …) = 마지막 달·회차
+  if (ci < 0) ci = lastOf(/^\s*(계|총계)\s*$/);   // 날짜별 표 (오픈기간 카드 12/22 … | 계) = 계 열
   if (ci < 0) return 0;
   const lab = r => String(r[0] || '').trim(), hap = (d.rows || []).find(r => /^(합계|합\s*계|총계)$/.test(lab(r)));   // 표에 합계 줄이 있으면 그 값 (계·부가세·합계 겹쳐 더하지 않게)
   return hap ? toNum(hap[ci]) : sum((d.rows || []).filter(r => !/^(계|소계)$/.test(lab(r))), r => toNum(r[ci]));
@@ -478,7 +486,7 @@ function viewPumui() {
   const due = [['pay', P, `${monthNo(P)}월분 인건비 청구`, 'pay'], ['monthly', T, `${monthNo(T)}월 월결제`, 'monthly']]
     .filter(([k, ym]) => !whole.some(p => p.kind === k && p.linkYm === ym));
   return `${pageHead('품의서 대장', `${esc(s.fullName || s.name)} · 다음 번호 ${pmNextNo()}`,
-    BTN('pmAdd', '+ 새 품의서', 'title="양식(채용·업체 섭외·사무집기·영업팀 단가·오픈기간 카드 …)을 골라 엑셀 또는 프로그램에서 작성"', 'primary') + BTN('pmSync', '엑셀·스캔본 다시 읽기', 'title="현장 폴더/A. 기안품의 (C. 작성완료·A. 결재완료·B. 스캔본)의 엑셀·스캔본을 읽어 대장에 반영"') + BTN('pmExport', '엑셀로 저장', 'title="품의서 대장을 엑셀로 저장"'))}
+    BTN('pmAdd', '+ 새 품의서', 'title="양식(채용·업체 섭외·사무집기·영업팀 단가·오픈기간 카드 …)을 골라 엑셀 또는 프로그램에서 작성"', 'primary') + BTN('pmSync', '엑셀·스캔본 다시 읽기', 'title="현장 폴더/A. 기안품의 (C. 작성완료·A. 결재완료·B. 스캔본)의 엑셀·스캔본을 읽어 대장에 반영"'))}
       ${due.length ? `<div class="banner info small">이번 달 정기 청구: ${due.map(([, ym, l, tab]) => `<button class="chip" data-act="goto" data-tab="${tab}" data-ym="${ym}">${l} →</button>`).join(' ')}</div>` : ''}
       <div class="row small" style="margin-bottom:8px"><select data-ch="pmFilter"><option value="">전체 (${all.length}건)</option>${[...PM_STATUS, '스캔없음'].map(x => `<option ${x === f ? 'selected' : ''} value="${x}">${x === '스캔없음' ? '스캔본 없는 미완료' : `${x} (${cnt(x)}건)`}</option>`).join('')}</select>
         <input data-ch="pmQ" value="${esc(q)}" placeholder="제목·업체·번호 검색" class="inp" style="width:220px"></div>

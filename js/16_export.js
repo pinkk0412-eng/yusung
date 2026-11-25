@@ -127,7 +127,9 @@ function xlSheet(m, styles, landscape, hasPics) {
       const top = r === r0 && c === c0;
       cells.set(key(r, c), { st: b.st, pos: { t: r === r0, b: r === r1, l: c === c0, r: c === c1, diag: top && b.st.diag, wrap, shrink: b.cell && !wrap, fmt: top && num ? num.fmt : 0 }, v: top ? (num ? num.v : b.text) : '', n: top && !!num });
     }
-    if (r1 > r0 || c1 > c0) merges.push(`${xlCol(c0)}${r0 + 1}:${xlCol(c1)}${r1 + 1}`);
+    // 표 밖 왼쪽 정렬 한 줄 글(품의서 본문 줄·"2. 세부내역")은 합치지 않음 → 엑셀 글꼴이 조금 넓어도 옆 빈칸으로 넘쳐 보임 (합치면 잘림)
+    const spill = !b.cell && !wrap && r1 === r0 && b.st.h === 'left' && !b.st.bd?.r && !b.st.fill;
+    if ((r1 > r0 || c1 > c0) && !spill) merges.push(`${xlCol(c0)}${r0 + 1}:${xlCol(c1)}${r1 + 1}`);
   });
   // 상자 테두리: 둘레 칸의 그 쪽 테두리를 덧씀 (칸이 없으면 빈 칸을 만듦)
   const blank = { font: { sz: 10, b: false, i: false, u: false, c: 'FF000000' }, fill: null, h: 'left', v: 'center', bd: {}, diag: false };
@@ -159,11 +161,15 @@ async function saveXl(sheets, filename, hidden) {
   try { await saveXlRun(sheets, filename, hidden); } catch (e) { console.error(e); toast('엑셀을 만들지 못했습니다: ' + e.message); }
 }
 async function saveXlRun(sheets, filename, hidden = []) {
+  if (!sheets.some(x => x && x[1])) { toast('저장할 내용이 없습니다.'); return; }
+  toast('엑셀 만드는 중…');
+  download(filename, await xlBytes(sheets, hidden), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+}
+// 인쇄 html 시트들 → xlsx 바이트 (내려받기 없이 — 15 프로그램에서 쓴 품의서 엑셀 파일도 이것으로)
+async function xlBytes(sheets, hidden = []) {
   const list = sheets.filter(x => x && x[1]);
-  if (!list.length) { toast('저장할 내용이 없습니다.'); return; }
   const used = new Set(), nm = n => { let b = String(n).replace(/[\[\]:*?\/\\]/g, ' ').slice(0, 31) || 'Sheet', x = b, i = 2; while (used.has(x)) x = `${b.slice(0, 28)}(${i++})`; used.add(x); return x; };
   const names = list.map(([n]) => nm(n));
-  toast('엑셀 만드는 중…');
   const wb = XLSX.utils.book_new(); names.forEach(n => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['']]), n));
   if (hidden.length) { hidden.forEach(h => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(h.aoa), nm(h.name))); wb.Workbook = { Sheets: [...names.map(() => ({ Hidden: 0 })), ...hidden.map(() => ({ Hidden: 1 }))] }; }
   const z = xz.open(new Uint8Array(XLSX.write(wb, { bookType: 'xlsx', type: 'array' })));
@@ -192,7 +198,7 @@ async function saveXlRun(sheets, filename, hidden = []) {
   if (!/Extension="jpeg"/i.test(ct)) ct = ct.replace('</Types>', '<Default Extension="jpeg" ContentType="image/jpeg"/></Types>');
   xz.put(xz.get(z, '[Content_Types].xml'), ct);
   xz.put(xz.get(z, 'xl/styles.xml'), styles.xml());
-  download(filename, xz.save(z), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  return xz.save(z);
 }
 
 /* 인쇄 양식이 없는 표 → 회사 표 모양 html (제목 · 회색 머리글 · 테두리 · 소계/합계 색 · 숫자 오른쪽)

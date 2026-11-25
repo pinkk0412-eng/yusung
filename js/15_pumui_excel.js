@@ -267,8 +267,8 @@ const pmScanDir = it => (DIR.scan[it.kind] || DIR.pmScan);   // 인건비·월�
 const pmScanName = it => (DIR.scan[it.kind] ? safeName(it.docNo || `${site().name}${it.no}`) : safeName(`${pad2(it.no)}. ${it.title || ''}`));
 const pmNoOfName = n => toNum((String(n).match(/^\D{0,6}?(\d{1,4})(?=[.\s_)\-]|$)/) || [])[1]);
 // 현장폴더/A. 기안품의 를 훑어 엑셀·스캔본을 대장에 반영 (새 파일은 등록, 바뀐 엑셀은 다시 읽음)
-/* 프로그램에서 쓴 품의(general)도 같은 번호 엑셀을 하나 만들어 둠 (회사 양식 · 머리글·1. 내용·첨부서류만, 자리는 상태대로 pmXlDir) — 폴더에서 번호가 비지 않게
-   대장 연결은 x.xlFile (x.file 이 아님 → pmSyncFolder 가 엑셀 품의로 다시 읽지 않음). 한 번만 만들고, 뒤에 고쳐도 파일은 그대로 */
+/* 프로그램에서 쓴 품의(general)도 같은 번호 엑셀을 하나 만들어 둠 (인쇄 모양 그대로 · 자리는 상태대로 pmXlDir) — 폴더에서 번호가 비지 않게
+   대장 연결은 x.xlFile (x.file 이 아님 → pmSyncFolder 가 엑셀 품의로 다시 읽지 않음). 작성 창에서 저장할 때마다 다시 씀 (엑셀에서 고친 파일은 그대로, pmEnsureXl) */
 // 품의 엑셀 자리: 작성중 = A. 기안품의 (상위 폴더) · 결재중·결재완료 = C. 작성완료 — 품의서가 많아져도 헷갈리지 않게 나눠 둠
 const pmXlDir = st => ((st || '작성중') === '작성중' ? DIR.pm : DIR.pmDraft);
 async function pmPlaceFiles(id) {   // 상태에 맞는 폴더로 엑셀(file·xlFile)을 옮김 (A. 기안품의 ↔ C. 작성완료, 예전 "작성완료" 폴더 것도) → 옮긴 수
@@ -285,20 +285,37 @@ async function pmPlaceFiles(id) {   // 상태에 맞는 폴더로 엑셀(file·x
       for (let i = 2; ; i++) { try { await dst.getFileHandle(nm); nm = name.replace(/(\.xlsx?)$/i, `_${i}$1`); } catch (e) { break; } }
       const w = await (await dst.getFileHandle(nm, { create: true })).createWritable(); await w.write(file); await w.close();
       try { await src.removeEntry(name); } catch (e) { await dst.removeEntry(nm).catch(() => { }); throw e; }   // 원본을 못 지우면(엑셀로 열려 있음 등) 옮기지 않음
-      f.x[k] = `${to}/${nm}`; if (k === 'file') f.x.fileMtime = (await (await dst.getFileHandle(nm)).getFile()).lastModified;
+      f.x[k] = `${to}/${nm}`; f.x[k === 'file' ? 'fileMtime' : 'xlMtime'] = (await (await dst.getFileHandle(nm)).getFile()).lastModified;   // xlMtime: 옮긴 뒤에도 '엑셀에서 고치지 않은 파일'로 (pmEnsureXl)
       moved++;
     } catch (e) { toast(`품의서 파일을 옮기지 못했습니다: ${name} (엑셀에서 열려 있으면 닫고 [엑셀·스캔본 다시 읽기]를 누르세요)`); }
   }
   if (moved) save();
   return moved;
 }
-const pmFileSync = id => pmEnsureXl(id).then(() => pmPlaceFiles(id));   // 저장·상태 바꿀 때: 엑셀이 없으면 만들고, 상태에 맞는 폴더로
+const pmFileSync = (id, refresh = true) => pmEnsureXl(id, refresh).then(() => pmPlaceFiles(id));   // 저장할 때: 엑셀을 지금 내용으로 다시 쓰고(없으면 만들고), 상태에 맞는 폴더로
 const PM_XL_BUSY = new Set();
-async function pmEnsureXl(id) {
+/* 프로그램에서 쓴 품의서 → 엑셀 파일 = 인쇄 모양 그대로 (기안품의서 + 별첨 + 지출결의서 시트, 16 xlBytes)
+   저장할 때마다 다시 씀 · 엑셀에서 직접 고친 파일(마지막으로 쓴 뒤 바뀐 파일)은 덮어쓰지 않음 */
+async function pmEnsureXl(id, refresh) {
   if (!FS.ready || PM_XL_BUSY.has(id)) return false;
-  const f = pmFind(id); if (!f || f.x.kind !== 'general' || f.x.xlFile || !f.x.no) return false;
+  const f = pmFind(id); if (!f || f.x.kind !== 'general' || !f.x.no || (f.x.xlFile && !refresh)) return false;
   PM_XL_BUSY.add(id);
-  try { f.x.xlFile = await pmWriteExcel(await pmTemplateBytes(), f.x, 'new'); save(); return true; }
+  try {
+    const it = f.x, sheets = [['기안품의서', docPumui(it)], ...(it.noExpense ? [] : [['지출결의서', docExpense({ date: it.date || todayStr(), items: pmExpLines(it), minRows: 4 })]])];
+    let h = null;
+    if (it.xlFile) {
+      try { h = await fileAt(`${site().folder}/${it.xlFile}`, false); } catch (e) { h = null; }
+      if (h && it.xlMtime && (await h.getFile()).lastModified !== it.xlMtime) return false;   // 엑셀에서 고친 파일 → 그대로 둠
+    }
+    const bytes = await xlBytes(sheets);
+    if (!h) {
+      const to = pmXlDir(it.status), dir = await dirAt([site().folder, ...parts(to)]), name = safeName(`${it.no}. ${it.title || '기안품의서'}`).slice(0, 60) + '.xlsx';
+      let nm = name, i = 2; for (; ;) { try { await dir.getFileHandle(nm); nm = name.replace(/\.xlsx$/, `_${i++}.xlsx`); } catch (e2) { break; } }
+      h = await dir.getFileHandle(nm, { create: true }); it.xlFile = `${to}/${nm}`;
+    }
+    const w = await h.createWritable(); await w.write(bytes); await w.close();
+    it.xlMtime = (await h.getFile()).lastModified; save(); return true;
+  }
   catch (e) { toast('품의서 엑셀 파일을 만들지 못했습니다: ' + e.message); return false; }
   finally { PM_XL_BUSY.delete(id); }
 }
@@ -413,6 +430,36 @@ function pmFileInfo(it, extra) {
 
 /* 품의서 본문 = 블록 목록 (글 · 표 · 첨부서류 · 그림). 순서·개수·제목 자유, 번호(1. 2. 3.)는 자동 */
 const PM_BLOCK = { text: '글', table: '표', attach: '첨부서류', image: '그림' };
+const pmTsvGrid = tsvGrid;   // 엑셀 복사 글 → 칸 배열 (00 tsvGrid: 칸 안 줄바꿈 "…" 처리)
+/* 붙여넣은 칸 배열 → 표 { cols, rows }
+   · 엑셀 두 줄 머리글 (윗줄 "KT"·"113호" 칸을 가로로 합치고 아랫줄에 단가·금액) → "KT|단가" 열 이름
+   · 머리글도 값도 없는 열(합친 칸 때문에 생긴 빈 열)은 뺌 */
+function pmGridTable(grid) {
+  const n = Math.max(1, ...grid.map(r => r.length)), G = grid.map(r => Array.from({ length: n }, (x, j) => String(r[j] ?? '').replace(/^₩/, ''))).filter((r, i, A) => A.slice(0, i + 1).some(x => x.some(Boolean)));   // 맨 위 빈 줄은 뺌
+  let cols = G[0] || [], body = G.slice(1);
+  const [a, b] = G, big = v => /\d[\d,]{3,}/.test(v);   // 금액(1,000 이상)이 있으면 머리글 줄이 아님 (0.9%·단가 같은 글은 머리글)
+  if (a && b && G.length > 2 && !b[0] && b.some(Boolean) && !b.some(big) && b.some((v, j) => v && !a[j] && a.slice(0, j).some(Boolean))) {
+    let g = ''; cols = a.map((x, j) => { if (x) g = x; return b[j] ? `${g}|${b[j]}` : x; }); body = G.slice(2);
+  }
+  const keep = cols.map((c, j) => !!String(c).trim() || body.some(r => r[j]));
+  cols = cols.filter((c, j) => keep[j]); const rows = body.map(r => r.filter((v, j) => keep[j]));
+  const t = { cols: cols.length ? cols : [''], rows: rows.length ? rows : [cols.map(() => '')] };
+  const mg = pmAutoMerge(t); if (mg.length) t.merge = mg;   // 엑셀에서 합친 칸(빈 칸)은 인쇄할 때 위 칸과 합침
+  return t;
+}
+/* 인쇄할 때 빈 칸을 위 칸과 합칠 열 (docPumui b.merge): 왼쪽 글 열(금액·수량 열 앞까지) 중 빈 칸이 있는 열 */
+function pmAutoMerge(t) {
+  const tot = r => /^(계|소계|부가세|합계|합\s*계|총계|VAT)$/.test(String(r[0] || '').trim()), R = (t.rows || []).filter(r => !tot(r) && r.some(v => String(v ?? '').trim()));
+  const out = [];
+  for (let j = 0; j < t.cols.length; j++) {
+    if (/수량|단가|금액|합계|단위|비고|\d+월|\d+차/.test(t.cols[j]) || R.some(r => /\d[\d,]{3,}/.test(String(r[j] ?? '')))) break;
+    const vs = R.map(r => String(r[j] ?? '').trim()), cont = R.filter((r, i) => !vs[i]);   // 빈 칸인 줄 = 왼쪽 열도 모두 비어 있어야 (이어지는 줄) — "규격"처럼 첫 줄만 적은 열은 합치지 않음
+    if (vs[0] && cont.length && cont.every(r => r.slice(0, j).every(v => !String(v ?? '').trim()))) out.push(j);
+  }
+  return out;
+}
+// 문서 보기 표 칸 → 글 (Shift+Enter·붙여넣은 줄바꿈은 \n 으로)
+const pmCellText = el => String(el.innerText ?? el.textContent).replace(/ /g, ' ').split('\n').map(l => l.trim()).join('\n').replace(/^\n+|\n+$/g, '');
 function pmBlocks(it) {
   if (Array.isArray(it.blocks)) {   // 예전: 번호 없는 "별첨. ○○" 제목 표 → 별첨 블록 (제목은 번호 붙는 항목·별첨만 인쇄)
     it.blocks.forEach(b => { if (!b.num && !b.annex && /^별첨\s*\d*\s*[.:]?\s*/.test(b.title || '')) { b.annex = true; b.title = b.title.replace(/^별첨\s*\d*\s*[.:]?\s*/, ''); } });
@@ -440,34 +487,58 @@ const pmAmount = p =>toNum(p.amount) || (pmBlocks(p).filter(b => b.type === 'tab
    업체 칸이 빈 줄 = 바로 위 업체 · 계·소계·합계 줄은 뺌 · 업체 없는 부가세 줄이 하나뿐이면 업체별 금액 비율로 나눔
    업체별 합이 품의 금액과 달라도 업체별로 나눔 (인쇄 전 확인 pmExpWarns 로 알림) */
 function pmExpGroups(it) {
-  const want = { item: /^(구분|품목|과목|직종|내역|품명)/, name: /업체|임대인|거래처/, amount: /금액/ };
+  const want = { item: /^(구분|품목|과목|직종|내역|품명)/, name: /업체|임대인|거래처/, amount: /금액/, room: /호실|소재지/, note: /^비고/ };
   const tbs = pmBlocks(it).filter(b => b.type === 'table' && b.title !== '신규업체 등록사항');
   for (const tb of (tbs.length ? tbs : it.xlTable ? [it.xlTable] : [])) {
     const rows = pmTableRows(it, want, tb); if (!rows.some(r => r.name)) continue;
-    const g = new Map(), vats = []; let last = '';
+    // 임차 표(호실 열이 있는 표) = 호실·구분마다 한 줄 (영종 05·06 샘플: "113호 보증금/임대인", "113호 월세/임대인" 따로)
+    const per = (tb.cols || []).some(c => want.room.test(String(c).replace(/\s/g, '')));
+    const g = new Map(), vats = []; let last = '', room = '';
     rows.forEach(r => {
       if (/^(계|소계|합계|합\s*계|총계|VAT합계)$/.test(r.item.replace(/\s/g, ''))) return;
-      const amt = toNum(r.amount); if (r.name) last = r.name;
+      const amt = toNum(r.amount); if (r.name) last = r.name; if (r.room) room = r.room;
       if (!amt) return;
       if (!r.name && /^(부가세|부가가치세|VAT)/i.test(r.item)) { vats.push({ last, amt }); return; }
-      const key = last || it.vendor || '', x = g.get(key) || { a: key, items: [], amount: 0 };
-      x.amount += amt; if (r.item && !x.items.includes(r.item)) x.items.push(r.item); g.set(key, x);
+      const a = last || it.vendor || '', byRoom = per && /보증금|임차|월세|임대료/.test(r.item);   // 중개수수료 등은 업체·구분마다 한 줄
+      const key = per ? `${a}|${byRoom ? room : ''}|${r.item}` : a, x = g.get(key) || { a, items: [], amount: 0, ...(per ? { label: [byRoom ? room : '', r.item].filter(Boolean).join(' ') } : {}) };
+      x.amount += amt; if (r.item && !x.items.includes(r.item)) x.items.push(r.item); x.novat = (x.novat !== false) && PM_NOVAT.test(r.note); g.set(key, x);
     });
     const list = [...g.values()]; if (list.length < 2) return list;
-    if (vats.length === 1) {   // 표 맨 아래 부가세 한 줄 → 업체별 금액 비율로 (끝전은 마지막 업체)
-      const V = vats[0].amt, S = sum(list, x => x.amount); let left = V;
-      list.forEach((x, k) => { const v = k === list.length - 1 ? left : Math.round(V * x.amount / S); x.amount += v; left -= v; });
-    } else vats.forEach(v => { const x = g.get(v.last); if (x) x.amount += v.amt; });   // 업체마다 부가세 줄 → 바로 위 업체
+    if (vats.length === 1) {   // 표 맨 아래 부가세 한 줄 → 업체별 금액 비율로 (끝전은 마지막 업체) · 보증금 줄은 부가세 없음
+      const V = vats[0].amt, base = list.filter(x => !x.novat && !/보증금/.test(x.label || x.items.join(''))), on = base.length ? base : list, S = sum(on, x => x.amount); let left = V;
+      on.forEach((x, k) => { const v = k === on.length - 1 ? left : Math.round(V * x.amount / S); x.amount += v; left -= v; });
+    } else vats.forEach(v => { const x = [...g.values()].reverse().find(y => y.a === v.last && !/보증금/.test(y.label || '')) || g.get(v.last); if (x) x.amount += v.amt; });   // 업체마다 부가세 줄 → 바로 위 업체
     return list;
   }
   return [];
 }
+/* 지출결의서 적요 = 좁은 칸(A:D) 항목 · 넓은 칸(E:J) 업체 (영종 샘플: "판매수수료(1차) | ㈜○○", "수도요금 | ○○", "113호 보증금/임대인")
+   업체가 없으면 항목을 한 칸(A:J)에 */
+const pmExpTitle = t => String(t || '').replace(/\s*(?:에\s*관한|에\s*관하여|의)?\s*건(?=\s*(?:\(|$))/, '').trim();   // "견본주택 수도요금 납부의 건(6월분)" → "견본주택 수도요금 납부(6월분)"
 function pmExpItems(it) {
-  const total = pmAmount(it), one = [{ a: it.vendor || '', b: it.title || '', amount: total }];
-  if (it.org) return [{ a: it.vendor || '', b: `${it.org.kind}(${it.org.round}차)`, amount: total }];   // 조직 지급: 계약축하금(2차) | ㈜○○ | 금액(VAT 포함)
+  const total = pmAmount(it), line = (a, b, amount) => (b ? { a, b, amount } : { a: '', b: a, amount });
+  if (it.org) return [line(`${it.org.kind}(${it.org.round}차)`, it.vendor || '', total)];   // 조직 지급: 계약축하금(2차) | ㈜○○ | 금액(VAT 포함)
   const list = pmExpGroups(it);
-  if (list.length < 2) return one;
-  return list.map(x => ({ a: x.a, b: x.items.join('·') || it.title || '', amount: x.amount }));
+  if (list.length < 2) { const x = list[0], one = x && x.items.length === 1 ? x.items[0] : ''; return [line(one || pmExpTitle(it.title), it.vendor || (x && x.a) || '', total)]; }
+  return list.map(x => line(x.label || x.items.join('·') || pmExpTitle(it.title), x.a, x.amount));
+}
+// 지출결의서 비고: 줄마다 따로 (it.expNotes[줄 번호]) · 예전 자료는 한 칸(it.expNote)을 모든 줄에
+const pmExpNote = (it, i) => String((it.expNotes ? it.expNotes[i] : it.expNote) || '');
+// 지출결의서 적요 항목을 줄마다 고쳐 쓰기 (it.expA[줄 번호], 비우면 자동: "견본주택 전기요금 납부(1월분)" → "전기요금")
+const pmExpA = (it, i) => String((it.expA || [])[i] || '');
+function pmExpLines(it) {   // 인쇄할 지출결의서 줄 = 자동 줄 + 고쳐 쓴 적요 + 비고
+  return pmExpItems(it).map((x, i) => { const o = pmExpA(it, i).trim(), y = o ? (x.a ? { ...x, a: o } : { ...x, b: o }) : x; return { ...y, note: y.note || pmExpNote(it, i) }; });
+}
+function pmXnHtml(it) {   // 작성 창: 지출결의서 줄 (적요 · 금액 · 비고 입력)
+  if (it.noExpense) return '<p class="muted small" style="margin:2px">지출결의서를 같이 올리지 않습니다 (아래 체크).</p>';
+  return `<table class="t pm-xn"><thead><tr><th>적요 <span class="muted">(항목 | 업체)</span></th><th>금액</th><th>비고</th></tr></thead><tbody>${pmExpItems(it).map((x, i) => `<tr><td><input class="pm-xa" data-pxa="${i}" value="${esc(pmExpA(it, i))}" placeholder="${esc(x.a || x.b || '(제목 없음)')}" title="지출결의서 적요 (비우면 자동)">${x.a && x.b ? ` <span class="muted">| ${esc(x.b)}</span>` : ''}</td><td class="num">${fmt0(x.amount) || '-'}</td>
+    <td><input data-pxn="${i}" value="${esc(pmExpNote(it, i))}" placeholder="예) 기안품의서 YS-○○현장2512-24 참고"></td></tr>`).join('')}</tbody></table>`;
+}
+function pmBudgetPick() {   // 예산심의한도: 이 현장 예산 항목에서 골라 넣기 (금액은 관리자 모드에서만 — 경리 모드는 항목 이름만 있음)
+  const B = typeof bgMonthDoc === 'function' ? bgMonthDoc() : null; if (!B || !(B.items || []).length) return '';
+  const val = it => B.pub ? bgItemLabel(it) : `${bgItemLabel(it)} ${fmt(bgLim(B, it))}원`;
+  const opts = bgAccs(B).map(acc => `<optgroup label="${esc(acc)}">${B.items.filter(it => bgAccKey(it.acc) === acc && (B.pub || bgLim(B, it))).map(it => `<option value="${esc(val(it))}">${esc(val(it))}</option>`).join('')}</optgroup>`).join('');
+  return `<label title="고르면 왼쪽 예산심의한도 칸에 넣음 (넣은 뒤 고쳐도 됨)"><span class="pm-lab">예산에서 가져오기${B.pub ? ' <span class="muted">(금액은 관리자 모드)</span>' : ''}</span><select id="pmBgPick"><option value="">— 예산 항목 —</option><option value="예산 심의 전">예산 심의 전</option><option value="예산 외">예산 외</option>${opts}</select></label>`;
 }
 function pmExpWarns(it) {   // 인쇄 전 확인 (14 pmPrintWarns): 업체별 나누기가 안 되거나 합이 다를 때
   if (it.noExpense || it.org) return [];
@@ -551,10 +622,11 @@ function pmEditor(item, warns = []) {
     if (b.type === 'text') main = pdEd(i, 'text', lead ? '첫 줄은 굵게 제목처럼 인쇄됩니다. Enter 로 다음 줄 · Tab 으로 들여쓰기 (가. 나. 다. ※ …)' : '내용 (Tab 으로 들여쓰기)', pdLines(String(b.text || '').replace(/\n+$/, ''), true).replace(/^<div><br><\/div>$/, ''), lead ? ' lead' : '');
     if (b.type === 'table') main = `${pdEd(i, 'unit', '표 위 오른쪽 글 (예: (단위: 원 / VAT 포함))', esc(b.unit || ''))}${pdTable(b, i)}${pdEd(i, 'note', '표 아래 메모 (없으면 비워 두기)', b.note ? pdLines(b.note) : '')}
         <div class="pd-tools"><label><input type="checkbox" data-b="${i}" data-f="sum" ${b.sum ? 'checked' : ''}> 합계 줄 자동</label>
+          ${(b.merge || []).length || pmAutoMerge(b).length ? `<label title="구분·품명처럼 왼쪽 글 열의 빈 칸을 인쇄할 때 위 칸과 합침 (엑셀에서 합친 칸)"><input type="checkbox" data-bmerge="${i}" ${(b.merge || []).length ? 'checked' : ''}> 빈 칸은 위 칸과 합치기 (인쇄)</label>` : ''}
           ${pmCmpVendors(b).length ? `<button class="btn ghost sm" data-bgrpadd="${i}">+ 비교 업체</button>` : ''}
           ${b.cols.some(c => /수량/.test(c)) && !/판매내역/.test(b.title || '') ? `<button class="btn ghost sm" data-basset="${i}" title="이 표의 품목을 자산·집기 대장에 등록">📦 자산 대장에 등록</button>` : ''}
           ${it.tpl === 'opencard' ? `<button class="btn ghost sm" data-bcard="${i}" data-each="">💳 카드 내역 불러오기 (구분별)</button><button class="btn ghost sm" data-bcard="${i}" data-each="1">💳 한 건씩</button>` : ''}
-          <span class="muted">칸에서 오른쪽 클릭 = 행·열 추가/삭제 · Tab = 다음 칸 · 엑셀 표를 칸에 붙여넣기 가능</span></div>`;
+          <span class="muted">칸에서 오른쪽 클릭 = 행·열 추가/삭제 · Tab = 다음 칸 · Shift+Enter = 칸 안 줄바꿈 · 엑셀 표를 칸에 붙여넣기 가능</span></div>`;
     if (b.type === 'attach') main = pdAttach(b, i) + pdEd(i, 'note', '첨부서류 아래 메모 (예: 후첨 사유)', b.note ? pdLines(b.note) : '');
     if (b.type === 'image') main = `${b.rel ? `<img data-bpreview="${i}" style="width:${b.width || 100}%;max-width:100%;display:block">` : ''}
         <div class="${b.rel ? 'pd-tools' : 'pd-tools on'}"><button class="btn sm" data-bimg="${i}">${b.rel ? '그림 바꾸기' : '그림 넣기 (사진·캡처)'}</button><label>너비 <select data-b="${i}" data-f="width">${[100, 80, 60, 50, 40].map(w => `<option ${+b.width === w ? 'selected' : ''} value="${w}">${w}%</option>`).join('')}</select></label><span class="muted">Ctrl+V 로 캡처 붙여넣기도 됨</span></div>`;
@@ -584,9 +656,9 @@ function pmEditor(item, warns = []) {
   };
   function readDoc(r) {
     r.querySelectorAll('[data-db][data-df]').forEach(el => { const b = B[+el.dataset.db], f = el.dataset.df; if (!b) return; b[f] = f === 'text' ? pdRead(el) : f === 'note' ? pmPlain(pdRead(el)) : el.textContent.replace(/\s+/g, ' ').trim(); });
-    r.querySelectorAll('[data-db][data-dh]').forEach(el => { B[+el.dataset.db].cols[+el.dataset.dh] = el.textContent.trim(); });
-    r.querySelectorAll('[data-db][data-dg]').forEach(el => { const i = +el.dataset.db, g = el.textContent.trim(); el.dataset.dg.split(',').forEach(j => { const s = r.querySelector(`[data-db="${i}"][data-ds="${j}"]`); B[i].cols[+j] = `${g}|${s ? s.textContent.trim() : ''}`; }); });
-    r.querySelectorAll('td[data-db][data-r]').forEach(el => { const t = B[+el.dataset.db]; (t.rows[+el.dataset.r] = t.rows[+el.dataset.r] || [])[+el.dataset.c] = el.textContent.trim(); });
+    r.querySelectorAll('[data-db][data-dh]').forEach(el => { B[+el.dataset.db].cols[+el.dataset.dh] = pmCellText(el); });
+    r.querySelectorAll('[data-db][data-dg]').forEach(el => { const i = +el.dataset.db, g = pmCellText(el); el.dataset.dg.split(',').forEach(j => { const s = r.querySelector(`[data-db="${i}"][data-ds="${j}"]`); B[i].cols[+j] = `${g}|${s ? pmCellText(s) : ''}`; }); });
+    r.querySelectorAll('td[data-db][data-r]').forEach(el => { const t = B[+el.dataset.db]; (t.rows[+el.dataset.r] = t.rows[+el.dataset.r] || [])[+el.dataset.c] = pmCellText(el); });
   }
   const body = `<div class="pm-ed">
       <div id="pmAiWarn">${pmAiWarnHtml(warns)}</div>
@@ -605,12 +677,14 @@ function pmEditor(item, warns = []) {
         ${f('기안번호', 'docNo')}
         ${it.tpl === 'opencard' ? `${f('카드 사용 시작일', 'useFrom', 'date')}${f('카드 사용 종료일', 'useTo', 'date')}<label><span class="pm-lab">카드 <span class="muted">(쉼표, 비우면 전체)</span></span><input data-pf="useCards" value="${esc((it.useCards || []).join(', '))}" placeholder="예) 0889, 9192"></label>` : ''}
       </div>
-      <details class="pm-ed-more"${it.firstNo || (it.budget && it.budget !== '-') || it.noExpense || it.noAttPrint || it.noCardPrint || it.expNote ? ' open' : ''}><summary>더보기 <span class="muted">최초 기안번호 · 예산심의한도 · 지출결의서 비고 · 첨부${it.tpl === 'opencard' ? '·카드 내역' : ''} 인쇄</span></summary>
+      <details class="pm-ed-more"${it.firstNo || (it.budget && it.budget !== '-') || it.noExpense || it.noAttPrint || it.noCardPrint || it.expNote || (it.expNotes || []).some(Boolean) || (it.expA || []).some(Boolean) ? ' open' : ''}><summary>더보기 <span class="muted">최초 기안번호 · 예산심의한도 · 지출결의서 비고 · 첨부${it.tpl === 'opencard' ? '·카드 내역' : ''} 인쇄</span></summary>
         <div class="form-grid pm-ed-g4" style="margin-top:8px">
           ${f('최초 기안번호 <span class="muted">(연속 품의)</span>', 'firstNo', 'text', 'placeholder="예) YS-○○현장2512-24"')}
           ${f('예산심의한도', 'budget', 'text', 'placeholder="예) 예산 심의 전"')}
-          <label style="grid-column:span 2" title="같이 인쇄되는 지출결의서의 비고 칸 (줄마다 같은 글). 비우면 빈칸"><span class="pm-lab">지출결의서 비고 <span class="muted">(비우면 빈칸)</span></span><input data-pf="expNote" value="${esc(it.expNote || '')}" placeholder="예) 기안품의서 YS-○○현장2512-24 참고"></label>
+          ${pmBudgetPick()}
         </div>
+        <div class="pm-xn-box"><div class="pm-lab" style="margin:10px 0 4px">지출결의서 적요·비고 <span class="muted">— 줄마다 따로 (적요를 비우면 자동, 비고를 비우면 빈칸) · 세부내역 표를 고쳤으면</span> <button type="button" class="btn ghost sm" id="pmXnRe">↻ 줄 다시 읽기</button></div>
+          <div id="pmXn">${pmXnHtml(it)}</div></div>
         <div class="pm-ed-opts">
           <label><input type="checkbox" data-pf-x="noExpense" ${it.noExpense ? '' : 'checked'}> 지출결의서 같이 올림 <span class="muted">(바로 지급 → 손익 반영 · 끄면 월결제 등으로 지급)</span></label>
           <label><input type="checkbox" data-pf-x="noAttPrint" ${it.noAttPrint ? '' : 'checked'}> 첨부서류 파일 같이 인쇄 (📎)</label>
@@ -624,6 +698,11 @@ function pmEditor(item, warns = []) {
     { label: '저장', onClick: r => { collect(r); pmPut(it); save(); render(); pmFileSync(it.id); toast('저장했습니다.'); } },
     { label: '저장 후 인쇄', cls: 'primary', onClick: async r => { collect(r); pmPut(it); save(); render(); pmFileSync(it.id); if (await pmPrintDoc(it) === false) { toast('저장했습니다. 고친 뒤 다시 인쇄하세요.'); } } }]);
   modalSize(root, 'xl');
+  const xnRe = () => { collect(root); root.querySelector('#pmXn').innerHTML = pmXnHtml(it); };   // 세부내역 표(업체별 줄)를 고친 뒤 지출결의서 줄 다시 보기
+  root.querySelector('#pmXnRe').onclick = xnRe;
+  root.querySelector('.pm-ed-more').addEventListener('toggle', ev => { if (ev.target.open) xnRe(); });
+  const bgSel = root.querySelector('#pmBgPick');
+  if (bgSel) bgSel.onchange = () => { if (!bgSel.value) return; const inp = root.querySelector('[data-pf="budget"]'); inp.value = bgSel.value; bgSel.value = ''; inp.focus(); };
   function readBlocks(r) {
     readDoc(r);
     r.querySelectorAll('[data-b][data-f]').forEach(el => { const b = B[+el.dataset.b]; if (!b) return; const k = el.dataset.f; b[k] = el.type === 'checkbox' ? el.checked : k === 'width' ? +el.value : el.value; });
@@ -633,6 +712,10 @@ function pmEditor(item, warns = []) {
   function collect(r) {
     r.querySelectorAll('[data-pf]').forEach(el => { const k = el.dataset.pf; it[k] = ['no', 'amount', 'prepaidAmt'].includes(k) ? toNum(el.value) : k === 'useCards' ? el.value.split(/[,\s]+/).map(x => x.replace(/\D/g, '').slice(-4)).filter(Boolean) : el.value; });
     r.querySelectorAll('[data-pf-x]').forEach(el => { const k = el.dataset.pfX; it[k] = k === 'noExpense' || k === 'noAttPrint' || k === 'noCardPrint' ? !el.checked : el.checked; });
+    const xn = [...r.querySelectorAll('[data-pxn]')];   // 지출결의서 비고 (줄마다) — 예전 한 칸 비고(expNote)는 줄마다 칸으로 옮김
+    if (xn.length) { it.expNotes = xn.map(el => el.value.trim()); delete it.expNote; }
+    const xa = [...r.querySelectorAll('[data-pxa]')];   // 지출결의서 적요 고쳐 쓴 것 (비우면 자동)
+    if (xa.length) { it.expA = xa.map(el => el.value.trim()); if (!it.expA.some(Boolean)) delete it.expA; }
     readBlocks(r);
   }
   const redraw = () => { root.querySelector('#pmBlocks').innerHTML = docHtml(); bind(); };
@@ -648,12 +731,13 @@ function pmEditor(item, warns = []) {
     const rg = document.createRange(), s = getSelection(); rg.selectNodeContents(el); if (!/^T[DH]$/.test(el.tagName)) rg.collapse(false);
     s.removeAllRanges(); s.addRange(rg);
   }
-  const pdGrid = text => { const L = text.replace(/\r/g, '').split('\n'); while (L.length && !L[L.length - 1].trim()) L.pop(); return L.map(l => l.split('\t').map(v => v.trim())); };
+  const pdGrid = pmTsvGrid;
   function pdMenuClose() { const m = document.getElementById('pdMenu'); if (m) m.remove(); document.removeEventListener('mousedown', pdMenuOut, true); }
   function pdMenuOut(e) { if (!(e.target.closest && e.target.closest('#pdMenu'))) pdMenuClose(); }
   function pdBind(q) {
     q('[data-pdbold]').forEach(b => { b.onmousedown = ev => ev.preventDefault(); b.onclick = () => document.execCommand('bold'); });
     q('.pd-tools [data-f="sum"], .pd-tools [data-f="width"]').forEach(el => el.onchange = op(() => { }));
+    q('[data-bmerge]').forEach(el => el.onchange = op(() => { const b = B[+el.dataset.bmerge]; if (el.checked) b.merge = pmAutoMerge(b); else delete b.merge; }));
     q('[data-blvl]').forEach(el => el.onchange = op(() => { const b = B[+el.dataset.blvl]; b.num = el.value === 'num'; b.sub = el.value === 'sub'; if (!b.sub) delete b.sub; }));
     q('[data-battrm]').forEach(b => b.onclick = op(() => B[+b.dataset.battrm].items.splice(+b.dataset.k, 1)));
     // 표 칸: 엑셀에서 복사한 표 → 그 칸부터 채움 (행·열 자동 추가) · 그냥 글은 서식 없이
@@ -678,10 +762,10 @@ function pmEditor(item, warns = []) {
       ev.preventDefault(); ev.stopPropagation();
       if (c.dataset.df === 'text' && /\t/.test(text) && /\n/.test(text.trim())) {
         readBlocks(root);
-        const grid = pdGrid(text), nb = pmNewBlock('table'), n = Math.max(...grid.map(r => r.length));
-        nb.cols = grid[0].concat(Array(n - grid[0].length).fill(''));
-        nb.rows = grid.slice(1).map(r => nb.cols.map((x, j) => (r[j] || '').replace(/^₩/, ''))); if (!nb.rows.length) nb.rows = [nb.cols.map(() => '')];
-        curB = +c.dataset.db + 1; B.splice(curB, 0, nb); redraw(); toast('엑셀 표를 새 표로 넣었습니다.'); return;
+        const nb = Object.assign(pmNewBlock('table'), pmGridTable(pdGrid(text))), i = +c.dataset.db;
+        if (!c.textContent.trim() && B[i] && !(B[i].title || '').trim()) { nb.num = B[i].num; if (B[i].sub) nb.sub = true; B.splice(i, 1, nb); curB = i; }   // 빈 글 항목에 붙여넣으면 그 자리를 표로
+        else { curB = i + 1; B.splice(curB, 0, nb); }
+        redraw(); toast('엑셀 표를 새 표로 넣었습니다.'); return;
       }
       document.execCommand('insertText', false, /^(text|note)$/.test(c.dataset.df) ? text.replace(/\r/g, '') : text.replace(/\s+/g, ' ').trim());
     });
@@ -722,6 +806,7 @@ function pmEditor(item, warns = []) {
     const td = ev.target.closest && ev.target.closest('.pd-tbl [contenteditable]');
     if (!td || (ev.key !== 'Tab' && ev.key !== 'Enter') || ev.isComposing) return;
     ev.preventDefault();
+    if (ev.key === 'Enter' && ev.shiftKey && td.tagName === 'TD') { document.execCommand('insertLineBreak'); return; }   // Shift+Enter = 칸 안 줄바꿈 (엑셀 Alt+Enter)
     const cells = [...td.closest('table').querySelectorAll('[contenteditable="true"]')], k = cells.indexOf(td), i = +td.dataset.db;
     const addRow = col => { readBlocks(root); const t = B[i]; t.rows.push(t.cols.map(() => '')); redraw(); pdFocus(root.querySelector(`td[data-db="${i}"][data-r="${t.rows.length - 1}"][data-c="${col}"]`)); };
     if (ev.key === 'Enter') {
@@ -1068,7 +1153,7 @@ function pmNextRound(src) {
   const copy = JSON.parse(JSON.stringify(src)); copy.blocks = JSON.parse(JSON.stringify(pmBlocks(src)));
   const it = pmNew({ ...copy, id: uid(), no: pmNextNo(), date: todayStr(), status: '작성중', scans: [], title: bump(src.title), firstNo: src.firstNo || src.docNo, prevId: src.id });
   delete it._ym; delete it.body; delete it.detail; delete it.attach; delete it.detailNote;
-  ['urgent', 'dueDate', 'paid', 'prepaidBy', 'prepaidAmt', 'prepaidDone', 'linkedAt', 'useFrom', 'useTo', 'lateReason', 'reportLine', 'xlFile'].forEach(k => delete it[k]);   // 긴급·선지급·반영 표시·엑셀 파일(pmEnsureXl)은 새 회차에 넘기지 않음
+  ['urgent', 'dueDate', 'paid', 'prepaidBy', 'prepaidAmt', 'prepaidDone', 'linkedAt', 'useFrom', 'useTo', 'lateReason', 'reportLine', 'xlFile', 'xlMtime'].forEach(k => delete it[k]);   // 긴급·선지급·반영 표시·엑셀 파일(pmEnsureXl)은 새 회차에 넘기지 않음
   it.docNo = pmDocNo(it.no, it.date);
   it.blocks.forEach(b => { if (b.type === 'table') b.cols = b.cols.map(c => c.replace(/\(금회\)/, '')); if (b.type === 'attach') (b.items || []).forEach(a => { delete a.files; }); });   // 다음 회차: 📎 첨부 파일은 새로
   pmEditor(it);
@@ -1082,7 +1167,7 @@ async function pmPrintDoc(it, preview) {
   for (const b of pmBlocks(it)) if (b.type === 'image' && b.rel) { try { urls[b.rel] = (await fileURL(b.rel)).url; } catch (e) { } }
   const attPages = it.noAttPrint ? [] : await pmAttachPages(it);   // 📎 첨부서류 파일 → 맨 뒤 (기타 서류)
   // 회사 순서: 품의서 갑지 → 지출결의서 → 기타 서류(오픈기간 카드 사용내역 · 📎 첨부) · 지출결의서 비고 = 작성 창 "지출결의서 비고" (자동으로 채우지 않음)
-  const html = docPumui(it, urls) + (it.noExpense ? '' : docExpense({ date: it.date || todayStr(), items: pmExpItems(it).map(x => ({ ...x, note: x.note || it.expNote || '' })), minRows: 4 })) + pmCardPages(it) + attPages.join('');
+  const html = docPumui(it, urls) + (it.noExpense ? '' : docExpense({ date: it.date || todayStr(), items: pmExpLines(it), minRows: 4 })) + pmCardPages(it) + attPages.join('');
   if (preview) {   // 작성 창 위에 겹쳐 띄움 (닫으면 작성 창 그대로)
     const ov = document.createElement('div'); ov.className = 'modal-bg'; ov.style.zIndex = '2000';
     ov.innerHTML = `<div class="modal" style="max-width:880px"><h3>미리보기</h3><div class="mbody"><div class="pm-preview">${html}</div></div><div class="actions"><button class="btn primary">닫기 (작성 창으로)</button></div></div>`;
@@ -1135,19 +1220,25 @@ function docPumui(it, urls = {}) {
     const cols = (b.cols || []).map(c => String(c || ''));
     if (!cols.length) return '';
     const two = cols.some(c => c.includes('|'));
-    const isNum = j => /금액|지급액|단가|합계|누계|청구|수량|\d+월|\d+차|계(?!약)|요금|금회/.test(cols[j]);   // 계약일자·계약자는 숫자 칸 아님
+    const isTot0 = r => /^(계|소계|부가세|합계|합\s*계|총계|VAT)$/.test(String(r[0] || '').trim());
+    const isDay = v => /^\d{2,4}\.\d{1,2}\.\d{1,2}\.?$/.test(String(v).trim());   // 2026.01.31. = 날짜 (금액으로 읽지 않음)
+    const numCol = cols.map((c, j) => { const vs = (b.rows || []).filter(r => !isTot0(r)).map(r => String(r[j] ?? '').trim()).filter(Boolean);   // 머리글이 날짜(12/22(월))여도 값이 모두 숫자·'-' 면 숫자 칸
+      return j > 0 && vs.some(v => Math.abs(toNum(v)) >= 1000) && vs.every(v => /^-?[\d,.]+$|^-$/.test(v) && !isDay(v)); });   // 금액만 (기간 6·수량 12 같은 작은 수는 가운데 그대로)
+    const isNum = j => /금액|지급액|단가|합계|누계|청구|수량|\d+월|\d+차|계(?!약)|요금|금회/.test(cols[j]) || numCol[j];   // 계약일자·계약자는 숫자 칸 아님
     // 두 줄 머리글: 같은 윗칸(업체명 등)이 이어지면 하나로 합침 · "확정" 칸은 굵게 테두리
     const grp = c => (c.includes('|') ? c.split('|')[0] : null), pick = j => /^확정/.test(grp(cols[j]) || '');
+    const hsp = j => { let n = 1; while (j + n < cols.length && !cols[j + n].trim()) n++; return n; };   // 머리글 빈 칸 = 왼쪽 머리글과 합침 (엑셀에서 "구분"을 세 칸에 걸쳐 합친 표)
+    const eh = t => esc(t).replace(/\n/g, '<br>');   // 머리글 칸 안 줄바꿈 (엑셀 "1월⏎(12/25~1/24)")
     const h1 = cols.map((c, j) => { const [a, x] = c.split('|');
-      if (!two) return `<th>${esc(a)}</th>`;
-      if (x === undefined) return `<th rowspan="2">${esc(a)}</th>`;
+      if (!two) return !c.trim() && cols.slice(0, j).some(x => x.trim()) ? '' :`<th${hsp(j) > 1 && c.trim() ? ` colspan="${hsp(j)}"` : ''}>${eh(a)}</th>`;
+      if (x === undefined) return `<th rowspan="2">${eh(a)}</th>`;
       if (j > 0 && grp(cols[j - 1]) === a) return '';
       let n = 1; while (grp(cols[j + n] || '') === a) n++;
-      return `<th colspan="${n}"${pick(j) ? ' class="pick"' : ''}>${esc(a)}</th>`; }).join('');
-    const h2 = two ? cols.map((c, j) => { const x = c.split('|')[1]; return x !== undefined ? `<th${pick(j) ? ' class="pick"' : ''}>${esc(x)}</th>` : ''; }).join('') : '';
+      return `<th colspan="${n}"${pick(j) ? ' class="pick"' : ''}>${eh(a)}</th>`; }).join('');
+    const h2 = two ? cols.map((c, j) => { const x = c.split('|')[1]; return x !== undefined ? `<th${pick(j) ? ' class="pick"' : ''}>${eh(x)}</th>` : ''; }).join('') : '';
     const firstNum = Math.max(1, cols.findIndex((c, j) => j > 0 && isNum(j) && !/수량|단위/.test(c)));
     const labSpan = (() => { const q = cols.findIndex((c, j) => j > 0 && /수량/.test(c)); return q > 0 ? q : firstNum; })();
-    const cell = (v, j, sp = '') => { const t = String(v ?? '').trim(); const num = isNum(j) && /^-?[\d,.]+$/.test(t); return `<td${sp} class="${num ? 'num' : 'center'}${pick(j) ? ' pick' : ''}">${num ? fmt(toNum(t)) : esc(t)}</td>`; };
+    const cell = (v, j, sp = '') => { const t = String(v ?? '').trim(); const num = isNum(j) && /^-?[\d,.]+$/.test(t) && !isDay(t); return `<td${sp} class="${num ? 'num' : 'center'}${pick(j) ? ' pick' : ''}">${num ? fmt(toNum(t)) : esc(t).replace(/\n/g, '<br>')}</td>`; };   // 칸 안 줄바꿈(엑셀 Alt+Enter) 그대로
     const isTot = r => /^(계|소계|부가세|합계|합\s*계|총계|VAT)$/.test(String(r[0] || '').trim());
     const R = (b.rows || []).filter(r => r.some(v => String(v ?? '').trim()));
     // b.merge = [열 번호…] (에메트 견적 표의 구분·품명): 빈 칸은 위 칸과 세로로 합침 (왼쪽 열이 합쳐진 줄만), 아니면 왼쪽 칸과 가로로 합침 (예: 배송/설치/회수)
@@ -1203,10 +1294,4 @@ function docPumui(it, urls = {}) {
   // 별첨 블록: 품의서 다음 쪽부터 한 장씩 ("별첨1. 대비표")
   const annexHtml = annex.map((b, k) => `<div class="doc pf pf-annex"><div class="pf-annex-h">별첨${annex.length > 1 ? k + 1 : ''}. ${esc(b.title || PM_BLOCK[b.type])}</div>${blockHtml({ ...b, title: '', num: false, sub: false })}</div>`).join('');
   return `<div class="doc pf"><div class="pf-frame">${head}<div class="pf-body">${bodyHtml}${ex.length ? `<div class="pf-in">${ex.map(l => `<div class="pf-note">${esc(l)}</div>`).join('')}</div>` : ''}<div class="pf-in"><div class="pf-note">끝.</div></div></div></div></div>${annexHtml}`;
-}
-function pmExport() {
-  const a = [[`${site().name}현장 품의서 대장`], ['번호', '기안번호', '최초 기안번호', '기안일자', '구분', '양식', '제목', '업체명', '결제방법', '결제일', '금액', '상태', '스캔본']];
-  pmAll().sort((x, y) => toNum(x.no) - toNum(y.no)).forEach(p => a.push([p.no, p.docNo, p.firstNo || '', p.date, PM_KIND[p.kind] || '', (pmTpl(p.tpl) || {}).label || '', p.title, p.vendor || '', p.payMethod || '', p.payDate || '', pmAmount(p), p.status,
-    (p.scans || []).map(x => x.split('/').pop()).join(', ')]));
-  saveBook([['품의서 대장', sheet(a, [6, 22, 22, 11, 16, 14, 44, 20, 10, 10, 13, 9, 40])]], `${site().name}현장 품의서 대장.xlsx`);
 }

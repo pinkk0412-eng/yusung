@@ -234,6 +234,8 @@ const ACT = {
   assetPhotos: () => assetPhotoPrint(),
   pmAsset: el => { const f = pmFind(el.dataset.id); if (f) pmAssetDialog(f.x); },   // 품의서 대장 ⋯ → 자산 대장에 등록
   billAdd: () => billDialog(),   // 12b 매출 청구
+  billFeeAdd: () => billFeeDialog(),   // 12d 분양대행수수료 차수형
+  billExpAdd: () => billExpDialog(),   // 12e 실비 청구
   billEdit: (el, ev) => { if (ev.target.closest('.dd')) return; const x = billFind(el.dataset.id); if (x) billDialog(x); },   // 줄 클릭 (⋯ 메뉴는 빼고)
   billNext: el => { const x = billFind(el.dataset.id); if (x) billDialog(x, true); },
   billDel: el => { const x = billFind(el.dataset.id); if (!x || !confirm(`${billLabel(x.b.k)} ${x.b.round ? x.b.round + '차 ' : ''}청구를 삭제할까요?`)) return; const l = billList(db.cur, x.ym); l.splice(l.indexOf(x.b), 1); save(); render(); },
@@ -328,7 +330,7 @@ const ACT = {
   pmAdd: () => pmNewDialog(),  pmLink: el => { const f = pmFind(el.dataset.id); if (!f) return; const tp = pmTpl(f.x.tpl); if (tp && ['staff', 'rate'].includes(tp.link) && !isAdmin()) { toast('급여 단가가 들어가는 반영이라 관리자 모드에서 하세요.'); return; } pmLinkDialog(f.x); },
   pmSync: () => pmSyncFolder(false),
   pmEdit: (el, ev) => { if (ev) ev.preventDefault(); const f = pmFind(el.dataset.id); if (!f) return; if (f.x.kind === 'excel') pmFileInfo(f.x); else pmEditor(f.x); },
-  pmPrint: async el => { const f = pmFind(el.dataset.id); if (!f) return; if (f.x.kind === 'excel') { pmFileInfo(f.x); return; } if (f.x.kind !== 'general') { pmEditor(f.x); return; } if (await pmPrintDoc(f.x) === false) return; if (f.x.status === '작성중') { f.x.status = '결재중'; save(); render(); pmFileSync(f.x.id); } },   // 인쇄 = 작성 끝 → 엑셀을 C. 작성완료로
+  pmPrint: async el => { const f = pmFind(el.dataset.id); if (!f) return; if (f.x.kind === 'excel') { pmFileInfo(f.x); return; } if (f.x.kind !== 'general') { pmEditor(f.x); return; } if (await pmPrintDoc(f.x) === false) return; if (f.x.status === '작성중') { f.x.status = '결재중'; save(); render(); pmFileSync(f.x.id, false); } },   // 인쇄 = 작성 끝 → 엑셀을 C. 작성완료로
   pmNext: el => { const f = pmFind(el.dataset.id); if (!f) return; if (f.x.kind === 'excel') pmNextExcel(f.x); else pmNextRound(f.x); },
   pmDel: async el => { const f = pmFind(el.dataset.id); if (!f) return; if (!confirm(`${f.x.no}번 "${f.x.title}" 품의를 대장에서 삭제할까요?${(f.x.scans || []).length || f.x.file || f.x.xlFile ? '\n(엑셀·스캔본 파일도 함께 삭제)' : ''}`)) return; for (const r of [...(f.x.scans || []), ...(f.x.file ? [f.x.file] : []), ...(f.x.xlFile ? [f.x.xlFile] : [])]) await removeFile(r); f.list.splice(f.list.indexOf(f.x), 1); save(); render(); },
   pmScanAdd: async el => {
@@ -349,7 +351,6 @@ const ACT = {
         catch (e) { save(); render(); toast('스캔본을 저장하지 못했습니다: ' + e.message); return; }
         it.status = '결재완료'; it.scanExceptionReason = ''; save(); render(); toast(`스캔본 ${files.length}개를 저장하고 결재완료로 바꿨습니다.`);
       }); },
-  pmExport: () => pmExport(),
   pmPl: el => { const f = pmFind(el.dataset.id); if (f) pmPlDialog(f.x); },
   siteMerge: async () => {
     const fromId = $('#mergeFrom').value, from = db.sites.find(x => x.id === fromId), to = site(); if (!from) return;
@@ -412,6 +413,13 @@ const ACT = {
   u200One: el => { const t = txById(el.dataset.id); if (!t) return; if (!u200Done(t) && !confirm(`사용목적·참석자가 비어 있습니다.\n${t.date.slice(5)} ${t.merchant} ${fmt(t.amount)}원\n\n그대로 인쇄할까요?`)) return; printU200([t]); },   // 법인카드 탭 아래 20만원↑ 목록: 한 건만 인쇄
   repOpen: () => repDialog(repDefaultDate()),
   homeDay: el => { state.homeDay = el.dataset.d; state.ym = el.dataset.d.slice(0, 7); render(); },   // 업무 홈 달력 날짜 선택 · 다른 달 날짜(밀린 일)면 작업월도 그 달로
+  homeTaskDone: el => {   // 업무 홈 달력 일정 누르기 = 완료 표시/취소 (남은 항목 있으면 한 번 물음) · 월결제 마감은 그 탭으로
+    const { ym, key } = el.dataset;
+    if (key === 'monthlyClose') { state.tab = 'monthly'; state.ym = ym; render(); return; }
+    const o = nest(db.done, db.cur, ym);
+    if (!o[key]) { const b = taskBlockers(db.cur, ym, key); if (b.length && !confirm(`아직 남은 항목이 있습니다.\n\n${b.join('\n')}\n\n그래도 완료로 표시할까요?`)) return; }
+    o[key] = !o[key]; save(); render();
+  },
   repToggle: el => { const o = nest(db.done, db.cur, el.dataset.ym); o[el.dataset.key] = !o[el.dataset.key]; save(); render(); },
   // 월결제 증빙 파일 · 점검 메모
   mckFile: async el => {

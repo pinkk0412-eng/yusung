@@ -538,6 +538,8 @@ table.t tbody tr.sel td,table.t tbody tr[data-txid]:focus-within td{background:#
 .doc table.pf-att{width:100%;border-collapse:collapse;table-layout:fixed}
 .doc .pf-att th{background:#d9d9d9!important;font-weight:700;font-size:12.5px;border:1px solid #333;padding:4px}
 .doc .pf-att td{border:1px solid #333;font-size:12.5px;text-align:center;height:24px}
+.doc .pf-detail th,.doc .pf-detail td,.doc .pf-att td{word-break:keep-all;overflow-wrap:break-word}   /* 한글 낱말 중간에서 줄바꿈 안 함 (계약직→계약/직, 후첨→후/첨) · 아주 긴 낱말만 자름 */
+.doc .pf-att td:nth-child(even){white-space:nowrap;padding:0 1px;letter-spacing:-.5px}
 
 /* 품의서 블록 편집 */
 .form-grid label:has(>input[type=checkbox]){flex-direction:row;align-items:center;gap:4px}
@@ -560,6 +562,9 @@ table.t tbody tr.sel td,table.t tbody tr[data-txid]:focus-within td{background:#
 .pm-ed-more>summary{cursor:pointer;color:var(--ink-2);font-weight:600}
 .pm-ed-more>summary .muted{font-weight:400;font-size:12px;margin-left:6px}
 .pm-ed-more .pm-ed-opts{margin-top:8px}
+.pm-xn td:first-child{min-width:220px}
+.pm-xn input{min-width:280px;width:100%}
+.pm-xn input.pm-xa{min-width:160px;width:auto}
 /* 품의서 본문 [문서] 보기: 인쇄 모양 그대로 클릭해서 쓰기 */
 .pd-toolbar{position:sticky;top:-1px;z-index:5;display:flex;gap:6px;align-items:center;flex-wrap:wrap;max-width:880px;margin:0 auto 8px;padding:6px 8px;background:#fff;border:1px solid var(--line);border-radius:var(--r);box-shadow:0 1px 2px rgba(16,24,40,.06)}
 .pd-toolbar [data-pdbold]{min-width:32px}
@@ -595,6 +600,7 @@ table.pd-tbl{width:100%;border-collapse:collapse;font-size:13px;margin:2px 0}
 .pd-tbl th,.pd-tbl td{border:1px solid #8f98a6;padding:4px 6px;min-width:36px;text-align:center;vertical-align:middle}
 .pd-tbl th{background:#eef1f5;font-weight:700}
 .pd-tbl td.num{text-align:right}
+.pm-ed .pd-tbl td,.pm-ed .pd-tbl th{white-space:pre-wrap}
 .pd-tbl [contenteditable="true"]:focus{outline:2px solid #2b59c3;outline-offset:-2px;background:#fff}
 .pd-tbl tr.pd-tot td{background:#eceff3;font-weight:700}
 .pd-tbl tfoot td{background:#f3f5f8;font-weight:700;color:var(--ink-2)}
@@ -716,6 +722,22 @@ td.bg-vc .badge{display:block;margin-top:2px;white-space:normal}
 td.bg-vc label{display:flex;gap:4px;align-items:center;margin-top:2px;white-space:nowrap}
 .doc .xt-tbl tr.xt-sum td{background:#fde9d9!important;font-weight:700}
 .doc .xt-tbl tr.xt-tot td{background:#fcd5b4!important;font-weight:700}
+/* 매출 청구 12d 분양대행수수료 청구공문(.bfl) · 총괄표·실비 별첨 가로 인쇄(.bfx) · 작성 창 표(.bf-tbl) */
+@page bfland{size:A4 landscape;margin:10mm 8mm}
+.doc.bfx{page:bfland;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.doc.bfl{font-size:14px;line-height:1.7;padding:6mm 4mm}
+.doc.bfl .bfl-top{display:flex;align-items:center;gap:12px;border-bottom:2.5px solid #000;padding-bottom:8px;margin-bottom:14px}
+.doc.bfl .bfl-top img{height:34px}
+.doc.bfl .bfl-co{font-size:22px;font-weight:700;letter-spacing:4px}
+.doc.bfl table.bfl-h{width:100%;margin-bottom:10px}
+.doc.bfl table.bfl-h td{padding:2px 4px;font-size:14px;border:0}
+.doc.bfl tr.bfl-t td{font-weight:700;border-bottom:1px solid #000;padding-bottom:6px}
+.doc.bfl .bfl-body{margin-top:14px}
+.doc.bfl .bfl-in{padding-left:18px}
+.doc.bfl .bfl-c{text-align:center;margin:8px 0}
+.doc.bfl .bfl-sign{text-align:center;font-size:20px;font-weight:700;letter-spacing:6px;margin-top:48px}
+.bf-tbl input:not([type]),.bf-tbl input.num{min-width:96px;width:100%}
+.bf-tbl input[data-f="pct"],.bf-tbl input[data-f="n"]{min-width:52px}
 /* 엑셀로 옮길 때(화면 밖에서 잼): 지출결의서 74% 축소를 풀어 100% 크기로 */
 .xl-host .doc.ex .ex-frame{zoom:1}
 .xl-host .doc{margin:0}

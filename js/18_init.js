@@ -39,7 +39,7 @@ const CH = {
       f.x.scanExceptionReason = reason.trim();
     } else if (el.value !== '결재완료') f.x.scanExceptionReason = '';
     f.x.status = el.value; el.className = `pm-st ${pmStCls(el.value)}`;
-    pmFileSync(f.x.id);   // 15: 작성중 ↔ 작성 끝 → 엑셀을 A. 기안품의 ↔ C. 작성완료 로 옮김
+    pmFileSync(f.x.id, false);   // 15: 작성중 ↔ 작성 끝 → 엑셀을 A. 기안품의 ↔ C. 작성완료 로 옮김
   },
   pmFilter: el => { state.pmFilter = el.value; },
   pmQ: el => { state.pmQ = el.value; },
@@ -58,6 +58,8 @@ const CH = {
   mrow: el => { const m = monthOf(db.cur, el.dataset.ym || state.ym); const r = m.rows[el.dataset.id] = m.rows[el.dataset.id] || {}; r[el.dataset.f] = ['period', 'qty', 'endDate', 'diffReason', 'ckNote'].includes(el.dataset.f) ? el.value.trim() : toNum(el.value); if (el.dataset.f === 'ckNote') { delete r.qty; delete r.diffReason; } if (/^(ys|sh)$/.test(el.dataset.f)) { delete r.caterAuto; r.caterManual = true; } if (el.dataset.f === 'period') delete r.caterManual; },   // 사용기간을 고치면 캐터링 금액은 그 기간으로 다시 자동 (09 caterAutoApply)   // 비고 = 예전 대수·인원 + 변동 사유를 합친 칸 · data-ym = 업체별 월 지출 표(여러 달)
   mck: el => { const m = monthOf(db.cur, state.ym), v = db.vendors.find(x => x.id === el.dataset.id); if (!v) return; const r = m.rows[v.id] = m.rows[v.id] || {}; r.ck = r.ck || {}; r.ck[el.dataset.k] = el.value; v.ckDef = v.ckDef || {}; v.ckDef[el.dataset.k] = el.value === 'na' ? 'na' : 'need'; },
   site: el => { const s = site(); s[el.dataset.f] = el.type === 'checkbox' ? el.checked : el.dataset.num ? toNum(el.value) : el.value; },
+  feeDoc: el => { const s = site(); s.feeDoc = s.feeDoc || {}; s.feeDoc[el.dataset.f] = el.value; },   // 설정 › 분양대행수수료 청구공문 (12d)
+  taxSet: el => { const t = db.settings.tax = db.settings.tax || {}; t[el.dataset.f] = el.type === 'checkbox' ? el.checked : el.value.trim() === '' ? '' : toNum(el.value); },   // 설정 › 원천세 (00 taxOpt)
   appr: el => { site().approvers[+el.dataset.i][el.dataset.f] = el.value; },
   staff: el => { const p = db.staff.find(x => x.id === el.dataset.id); if (!p) return; p[el.dataset.f] = el.type === 'checkbox' ? el.checked : el.value.trim(); },
   payDoc: el => { const d = payDocsOf(state.ym); const c = d[el.dataset.co] = d[el.dataset.co] || {}; c[el.dataset.k] = el.checked; },
