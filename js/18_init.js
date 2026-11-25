@@ -214,7 +214,7 @@ async function init() {
       ev.preventDefault();
     }
   });
-  $('#tabs').addEventListener('click', ev => { const b = ev.target.closest('button'); if (!b) return; if (hiddenTab(b.dataset.tab)) { secUnlockDialog(b.dataset.tab); return; } state.tab = b.dataset.tab; render(); window.scrollTo(0, 0); });
+  $('#tabs').addEventListener('click', ev => { const b = ev.target.closest('button'); if (!b) return; if (hiddenTab(b.dataset.tab)) { secUnlockDialog(b.dataset.tab); return; } state.tab = b.dataset.tab; state.lockedTab = ''; render(); window.scrollTo(0, 0); });
   $('#settingsTopBtn').addEventListener('click', () => { state.tab = 'settings'; render(); window.scrollTo(0, 0); });
   $('#siteSelect').addEventListener('change', ev => { db.cur = ev.target.value; save(); render(); });
   $('#monthInput').addEventListener('change', ev => { if (ev.target.value) { state.ym = ev.target.value; render(); } });

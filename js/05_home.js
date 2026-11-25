@@ -24,8 +24,11 @@ function render() {
   document.querySelector('#tabs').style.visibility = '';
   document.querySelectorAll('.topbar .field-inline').forEach(x => x.style.visibility = '');
   if (state.tab === 'pl') { state.tab = 'budget'; state.bgSub = 'pl'; }   // 현장 손익은 14c 예산·손익 탭 안의 보기 (예전 링크·잠금 해제 후 이동)
-  if (hiddenTab(state.tab)) state.tab = 'home';
-  saveCurrentView();
+  if (hiddenTab(state.tab)) {   // 관리자 잠금 탭(예산·손익 등) → 홈. 보던 탭 기록은 그대로 두고, 처음 한 번은 잠금 해제 창 (풀면 그 탭으로)
+    const want = state.tab; state.lockedTab = want; state.tab = 'home';
+    if (!state.lockAsked) { state.lockAsked = true; setTimeout(() => { if (!document.querySelector('.modal-bg')) secUnlockDialog(want); }, 0); }
+  }
+  if (!(state.lockedTab && state.tab === 'home')) saveCurrentView();
   renderTop();
   const fn = VIEWS[state.tab] || VIEWS.home;
   // 넓은 표의 가로 스크롤: 같은 화면을 다시 그릴 때는 그 자리 그대로, 화면이 바뀌면 처음 위치 (data-scroll-end 표는 오른쪽 끝 = 최근 달)

@@ -42,7 +42,7 @@ const VATT = [['견적서', true], ['사업자등록증', false], ['통장사본
 const PM_TPL = [
   { id: 'hire', group: '채용', label: '채용·영업팀 단가', hint: '사람별 채용(직원 등록) 또는 직종별 영업팀 단가(인건비 반영) · 단가 변경도 이 양식으로', title: '기획 직원 채용의 건', payDate: '매월 10일', link: 'staff',
     body: S => [`${S} 현장 ○○ 직원 채용과 관련하여 아래와 같이 품의합니다.`, '가. 채용인원(총 ○명) : ', `나. 근무지 : ${S} 현장`, '다. 근무기간 : 0000.00.00.(예정) ~ 당 PJT 종료 시'],
-    table: { title: '세부내역', cols: ['성명', '직종', '지급형태', '급여단가', '식대', '근무 시작일', '주요업무', '비고'], rows: [['', '', '월급', '', '9,000', '', '', '']], sum: false, note: '※ 석식 : 야근 시에 한해 제공함' },
+    table: { title: '세부내역', cols: ['성명', '직종', '직급', '지급형태', '급여단가', '식대', '근무 시작일', '주요업무', '비고'], rows: [['', '', '', '월급', '', '9,000', '', '', '']], sum: false, note: '※ 석식 : 야근 시에 한해 제공함' },
     etc: ['가. 출퇴근 관리 프로그램(오션) 기준으로 출근일자 산정 후 당사 인건비 결제일에 맞추어 급여 지급 예정'], attach: [['이력서', true]] },
   // 업체 섭외 통합 양식 (초기 세팅·KT·CRM·문자·MGM·주유·캐터링 등을 하나로)
   { id: 'vendor', group: '업체 섭외', label: '업체 섭외·물품 임차', hint: '인터넷·전화·CRM·문자·생수·주유·캐터링·MGM·사무집기 임차 등 모든 업체', title: '○○ 업체 섭외의 건', payDate: '매월 25일', link: 'vendor', newBiz: true,
@@ -321,7 +321,7 @@ function pmLinkDialog(it) {
     // 새 이름 → 직원 등록 · 이미 있는 이름 → 적용일부터 새 단가 (달 중간이면 그 달은 앞뒤로 나눠 계산, 11_pay payApplyChange)
     const tb = pmBlocks(it).find(b => b.type === 'table' && b.title !== '신규업체 등록사항') || it.xlTable;
     const newHead = tb ? (tb.cols.find(c => /조정|변경후|변경\s*급여/.test(String(c))) || tb.cols.find(c => /급여단가|단가|급여/.test(String(c))) || '') : '';
-    rows = pmTableRows(it, { name: /성명|이름/, team: /직종|구분/, payType: /지급형태/, rate: /급여단가|단가|급여/, neu: /조정|변경후|변경급여/, old: /기존/, meal: /식대/, start: /시작일|적용일/ });
+    rows = pmTableRows(it, { name: /성명|이름/, team: /직종|구분/, title: /직급|직책/, payType: /지급형태/, rate: /급여단가|단가|급여/, neu: /조정|변경후|변경급여/, old: /기존/, meal: /식대/, start: /시작일|적용일/ });
     if (!rows.length) rows = blank(3);
     const start0 = pmApplyDate(it) || `${state.ym}-01`;
     const staffOf = name => siteStaff(true).find(s => s.name === String(name || '').trim());
@@ -329,8 +329,8 @@ function pmLinkDialog(it) {
     const rateOf = r => { const v = pmMoney(r.neu || r.rate); return v ? fmt(v) : (r.neu || r.rate || ''); };
     const dateOf = r => { const m = String(r.start || '').match(/(20\d{2})\s*[.\-\/]\s*(\d{1,2})\s*[.\-\/]\s*(\d{1,2})/); return m ? `${m[1]}-${pad2(+m[2])}-${pad2(+m[3])}` : start0; };
     const nowOf = name => { const p = staffOf(name); if (!p) return '<span class="muted">새 직원</span>'; const d = payDefaults(p); return `${esc(d.payType)} ${fmt(d.rate)}`; };
-    head = '<th></th><th>성명</th><th>구분(팀)</th><th>지금</th><th>지급형태</th><th>급여단가</th><th>식대단가</th><th title="이미 있는 직원: 이 날부터 새 단가 (달 중간이면 그 달은 나눠 계산)">적용일</th>';
-    rowHtml = (r, i) => `<td><input type="checkbox" data-lk="on" data-i="${i}" checked></td><td>${inp('name', i, r.name, 80)}</td><td>${inp('team', i, r.team, 90)}</td><td class="small" style="white-space:nowrap">${r.name ? nowOf(r.name) : ''}${r.old ? `<div class="muted">품의 기존: ${esc(r.old)}</div>` : ''}</td><td>${ptSel(i, typeOf(r))}</td><td>${inp('rate', i, rateOf(r), 100, 'num')}</td><td>${inp('meal', i, r.meal, 70, 'num')}</td><td><input type="date" data-lk="date" data-i="${i}" value="${esc(dateOf(r))}"></td>`;
+    head = '<th></th><th>성명</th><th>구분(팀)</th><th>직급</th><th>지금</th><th>지급형태</th><th>급여단가</th><th>식대단가</th><th title="이미 있는 직원: 이 날부터 새 단가 (달 중간이면 그 달은 나눠 계산)">적용일</th>';
+    rowHtml = (r, i) => `<td><input type="checkbox" data-lk="on" data-i="${i}" checked></td><td>${inp('name', i, r.name, 80)}</td><td>${inp('team', i, r.team, 90)}</td><td>${inp('title', i, r.title, 60)}</td><td class="small" style="white-space:nowrap">${r.name ? nowOf(r.name) : ''}${r.old ? `<div class="muted">품의 기존: ${esc(r.old)}</div>` : ''}</td><td>${ptSel(i, typeOf(r))}</td><td>${inp('rate', i, rateOf(r), 100, 'num')}</td><td>${inp('meal', i, r.meal, 70, 'num')}</td><td><input type="date" data-lk="date" data-i="${i}" value="${esc(dateOf(r))}"></td>`;
     note = '새 이름은 현장 인건비 직원으로 등록합니다. <b>이미 있는 직원은 적용일부터 새 단가</b>로 바뀝니다 — 1일이면 그 달부터, 달 중간이면 그 달은 적용일 앞뒤로 나눠 계산 (일급 = 출근일 × 일급, 월급 = 월급 × 일수 / 그 달 일수). 다음 달부터는 새 단가로 이어집니다.';
     apply = (vals) => {
       let add = 0; const chg = [];
@@ -338,8 +338,9 @@ function pmLinkDialog(it) {
         if (!v.name) return;
         const rate = toNum(v.rate), meal = v.meal !== '' ? { mealRate: toNum(v.meal) } : {};
         let p = staffOf(v.name);
-        if (!p) { p = { id: uid(), siteId: db.cur, name: v.name, team: v.team, title: '', active: true, kind: '현장' }; db.staff.push(p); add++; p.pay = Object.assign(p.pay || {}, { payType: v.payType, ...(rate ? { rate } : {}), ...meal }); return; }
+        if (!p) { p = { id: uid(), siteId: db.cur, name: v.name, team: v.team, title: v.title || '', active: true, kind: '현장' }; db.staff.push(p); add++; p.pay = Object.assign(p.pay || {}, { payType: v.payType, ...(rate ? { rate } : {}), ...meal }); return; }
         if (!p.team && v.team) p.team = v.team;
+        if (v.title && v.title !== p.title) p.title = v.title;   // 직급 (품의 표 "직급" 칸 — 승진 품의면 바뀜)
         if (rate && /^\d{4}-\d{2}-\d{2}$/.test(v.date)) chg.push(`${p.name} ${payApplyChange(p, v.date, v.payType, rate, meal)} ${v.payType} ${fmt(rate)}`);
         else p.pay = Object.assign(p.pay || {}, { payType: v.payType, ...(rate ? { rate } : {}), ...meal });
       });

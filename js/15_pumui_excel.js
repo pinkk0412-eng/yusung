@@ -536,9 +536,9 @@ function pmXnHtml(it) {   // 작성 창: 지출결의서 줄 (적요 · 금액 �
 }
 function pmBudgetPick() {   // 예산심의한도: 이 현장 예산 항목에서 골라 넣기 (금액은 관리자 모드에서만 — 경리 모드는 항목 이름만 있음)
   const B = typeof bgMonthDoc === 'function' ? bgMonthDoc() : null; if (!B || !(B.items || []).length) return '';
-  const val = it => B.pub ? bgItemLabel(it) : `${bgItemLabel(it)} ${fmt(bgLim(B, it))}원`;
-  const opts = bgAccs(B).map(acc => `<optgroup label="${esc(acc)}">${B.items.filter(it => bgAccKey(it.acc) === acc && (B.pub || bgLim(B, it))).map(it => `<option value="${esc(val(it))}">${esc(val(it))}</option>`).join('')}</optgroup>`).join('');
-  return `<label title="고르면 왼쪽 예산심의한도 칸에 넣음 (넣은 뒤 고쳐도 됨)"><span class="pm-lab">예산에서 가져오기${B.pub ? ' <span class="muted">(금액은 관리자 모드)</span>' : ''}</span><select id="pmBgPick"><option value="">— 예산 항목 —</option><option value="예산 심의 전">예산 심의 전</option><option value="예산 외">예산 외</option>${opts}</select></label>`;
+  // 항목은 여러 개 고를 수 있음 (고를 때마다 덧붙임 · 관리자 모드는 고른 항목 합계 금액) — 작성 창 pmBgPick onchange
+  const opts = bgAccs(B).map(acc => `<optgroup label="${esc(acc)}">${B.items.filter(it => bgAccKey(it.acc) === acc && (B.pub || bgLim(B, it))).map(it => `<option value="${esc(bgItemLabel(it))}" data-amt="${B.pub ? 0 : bgLim(B, it)}">${esc(bgItemLabel(it))}${B.pub ? '' : ` ${fmt(bgLim(B, it))}원`}</option>`).join('')}</optgroup>`).join('');
+  return `<label title="항목을 고를 때마다 왼쪽 예산심의한도 칸에 덧붙임 (여러 개 가능 · 넣은 뒤 고쳐도 됨)"><span class="pm-lab">예산에서 가져오기 <span class="muted">(여러 개${B.pub ? ' · 금액은 관리자 모드' : ''})</span></span><select id="pmBgPick"><option value="">— 예산 항목 —</option><option value="예산 심의 전" data-one="1">예산 심의 전</option><option value="예산 외" data-one="1">예산 외</option>${opts}</select></label>`;
 }
 function pmExpWarns(it) {   // 인쇄 전 확인 (14 pmPrintWarns): 업체별 나누기가 안 되거나 합이 다를 때
   if (it.noExpense || it.org) return [];
@@ -702,7 +702,17 @@ function pmEditor(item, warns = []) {
   root.querySelector('#pmXnRe').onclick = xnRe;
   root.querySelector('.pm-ed-more').addEventListener('toggle', ev => { if (ev.target.open) xnRe(); });
   const bgSel = root.querySelector('#pmBgPick');
-  if (bgSel) bgSel.onchange = () => { if (!bgSel.value) return; const inp = root.querySelector('[data-pf="budget"]'); inp.value = bgSel.value; bgSel.value = ''; inp.focus(); };
+  if (bgSel) {   // 예산 항목 여러 개: 고를 때마다 덧붙임 → "상담사 · TM 12,000,000원" (금액 = 고른 항목 합계, 경리 모드는 이름만) · 칸을 직접 고치면 새로 시작
+    const inp = root.querySelector('[data-pf="budget"]'); let picks = [];
+    inp.addEventListener('input', () => { picks = []; });
+    bgSel.onchange = () => {
+      const o = bgSel.selectedOptions[0]; if (!o || !o.value) return;
+      if (o.dataset.one) picks = []; else if (!picks.some(p => p.name === o.value)) picks.push({ name: o.value, amt: toNum(o.dataset.amt) });
+      const tot = sum(picks, p => p.amt);
+      inp.value = o.dataset.one ? o.value : `${picks.map(p => p.name).join(' · ')}${tot ? ` ${fmt(tot)}원` : ''}`;
+      bgSel.value = ''; inp.focus();
+    };
+  }
   function readBlocks(r) {
     readDoc(r);
     r.querySelectorAll('[data-b][data-f]').forEach(el => { const b = B[+el.dataset.b]; if (!b) return; const k = el.dataset.f; b[k] = el.type === 'checkbox' ? el.checked : k === 'width' ? +el.value : el.value; });

@@ -100,20 +100,28 @@ async function secMergeAll(sids) {   // 암호문 → 화면 자료에 합치기
 async function secTryKey(sid, key) { const s = siteSec(sid); if (!s || !key) return false; try { return (await secDec(key, s.check)) === 'ok'; } catch (e) { return false; } }
 const secMem = () => { try { const r = localStorage.getItem(SECKEY_LS) || ''; return !r ? {} : r[0] === '{' ? JSON.parse(r) : { '*': r }; } catch (e) { return {}; } };
 const secMemSet = m => { try { if (Object.keys(m).length) localStorage.setItem(SECKEY_LS, JSON.stringify(m)); else localStorage.removeItem(SECKEY_LS); } catch (e) { } };
-async function secAuto() {   // 폴더를 열 때: 이 창에서 이미 풀었거나, 이 PC에 기억해 둔 키가 있는 현장은 자동 해제
-  const m = secMem(), before = JSON.stringify(m), open = [];
+// 이 창(브라우저 탭)에서 푼 관리자 키 — 새로고침해도 풀린 채로 (창을 닫으면 사라짐 · "이 PC에서 계속 풀어 두기"와 따로)
+const SECKEY_SS = 'yusung_seckey_session';
+const secSess = () => { try { return JSON.parse(sessionStorage.getItem(SECKEY_SS) || '{}') || {}; } catch (e) { return {}; } };
+async function secSessSave() {
+  const o = {}; for (const [sid, k] of Object.entries(SEC.keys)) { try { o[sid] = b64(new Uint8Array(await crypto.subtle.exportKey('raw', k))); } catch (e) { } }
+  try { if (Object.keys(o).length) sessionStorage.setItem(SECKEY_SS, JSON.stringify(o)); else sessionStorage.removeItem(SECKEY_SS); } catch (e) { }
+}
+async function secAuto() {   // 폴더를 열 때: 이 창에서 이미 풀었거나(새로고침 포함), 이 PC에 기억해 둔 키가 있는 현장은 자동 해제
+  const m = secMem(), ss = secSess(), before = JSON.stringify(m), open = [];
   for (const st of db.sites) {
     const sid = st.id;
     if (!secOn(sid)) { delete SEC.keys[sid]; continue; }
     if (SEC.keys[sid] && !(await secTryKey(sid, SEC.keys[sid]))) delete SEC.keys[sid];
     if (!SEC.keys[sid]) {
-      const raw = m[sid] || m['*']; let key = null;
+      const mem = m[sid] || m['*'], raw = mem || ss[sid]; let key = null;
       if (raw) { try { key = await crypto.subtle.importKey('raw', unb64(raw), 'AES-GCM', true, ['encrypt', 'decrypt']); } catch (e) { key = null; } }
-      if (key && await secTryKey(sid, key)) { SEC.keys[sid] = key; m[sid] = raw; } else delete m[sid];
+      if (key && await secTryKey(sid, key)) { SEC.keys[sid] = key; if (mem) m[sid] = raw; } else delete m[sid];   // 이 창 키는 PC 기억(localStorage)에 옮기지 않음
     }
     if (SEC.keys[sid]) open.push(sid);
   }
   delete m['*']; if (JSON.stringify(m) !== before) secMemSet(m);   // 예전 키 하나 → 현장별로 바꿔 저장
+  await secSessSave();
   await secMergeAll(open);
 }
 async function secRemember(on, sids = [db.cur]) {
@@ -144,13 +152,13 @@ function secUnlockDialog(go) {   // go = 잠긴 탭을 눌러서 연 경우 → 
     const mine = await secUnlockWith(pw, [sid]);
     if (!mine.length) { toast('이 현장 비밀번호가 맞지 않습니다.'); return false; }
     const ok = mine.concat(await secUnlockWith(pw, db.sites.map(x => x.id).filter(x => x !== sid)));
-    await secMergeAll(ok); await secRemember($('#secRem', root).checked, ok); if (typeof go === 'string') state.tab = go; render();
+    await secMergeAll(ok); await secRemember($('#secRem', root).checked, ok); await secSessSave(); if (typeof go === 'string') state.tab = go; render();
     toast(`관리자 모드 — ${siteNames(ok)} 현장 손익·급여가 보입니다.`);
   });
 }
 async function secLock() {   // 푼 현장을 모두 잠금 (자리를 비울 때 한 번에)
   const sids = Object.keys(SEC.keys); if (!sids.length) return;
-  await flush(); SEC.keys = {}; await secRemember(false, sids); FS.secPlain = {};
+  await flush(); SEC.keys = {}; await secRemember(false, sids); await secSessSave(); FS.secPlain = {};
   await openRoot(FS.root); toast('잠갔습니다 (경리 모드). 현장 손익·비공개 급여는 보이지 않습니다.');
 }
 function secSetupDialog(change) {
@@ -173,14 +181,14 @@ function secSetupDialog(change) {
       const rem = all.filter(id => secRemembered(id));
       for (const id of all) { const st = db.sites.find(x => x.id === id); st.sec = { salt: b64(salt), check }; SEC.keys[id] = key; delete FS.secPlain[id]; }
       if (rem.length) await secRemember(true, rem);
-      save(); await flush(); render(); toast(`${siteNames(all)}: ${change ? '비밀번호를 바꿨습니다.' : '관리자 잠금을 켰습니다. 화면 위 🔓 버튼으로 잠그면 경리 모드가 됩니다.'}`);
+      await secSessSave(); save(); await flush(); render(); toast(`${siteNames(all)}: ${change ? '비밀번호를 바꿨습니다.' : '관리자 잠금을 켰습니다. 화면 위 🔓 버튼으로 잠그면 경리 모드가 됩니다.'}`);
     } }], 'm');
   setTimeout(() => { const i = $('#secPw1', r); if (i) i.focus(); }, 0);
 }
 async function secDisable() {   // 이 현장만 잠금 끄기
   const sid = db.cur, st = site();
   if (!SEC.keys[sid] || !confirm(`${st.name}현장의 관리자 잠금을 끌까요?\n이 현장 손익·급여가 다시 누구나 볼 수 있게 저장됩니다. (다른 현장 잠금은 그대로)`)) return;
-  await secRemember(false, [sid]); delete st.sec; delete st.secretBlob; delete SEC.keys[sid]; delete FS.secPlain[sid];
+  await secRemember(false, [sid]); delete st.sec; delete st.secretBlob; delete SEC.keys[sid]; delete FS.secPlain[sid]; await secSessSave();
   save(); await flush(); render(); toast(`${st.name}: 관리자 잠금을 껐습니다.`);
 }
 function secPanel() {
