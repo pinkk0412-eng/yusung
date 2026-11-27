@@ -56,9 +56,10 @@ function viewCard() {
   return `
     ${pageHead(`${ymLabel(ym)} 법인카드 ${cardCalView() ? '사용내역' : '정산'}`, `사용기간 ${cardPeriod(ym)} ${(() => { const st = cardStartSet(db.cur); return st > 1 ? `<span class="subtabs" style="display:inline-flex;margin:0 0 0 8px;vertical-align:middle">
         <button class="${cardCalView() ? '' : 'active'}" data-act="cardCal" data-v="" title="정산·집계표 기준 (20일쯤 받는 엑셀)">${st}일~익월${st - 1}일 (정산)</button><button class="${cardCalView() ? 'active' : ''}" data-act="cardCal" data-v="1" title="월초에 받는 엑셀">1일~말일</button></span>` : ''; })()}`,
-    BTN('importCard', '카드사 엑셀 불러오기', '', 'primary') + BTN('ocrRc', '영수증 사진 올리기', 'data-src="card" title="영수증 사진 여러 장을 한 번에 올리면 금액·날짜로 맞는 내역에 자동으로 붙입니다"') + BTN('addTx', '+ 직접 입력', 'data-src="card"') + BTN('autoCat', '자동 분류')
+    BTN('importCard', '카드사 엑셀 불러오기', '', 'primary')
     + MENU('인쇄', [MI('printCard', '집계표 인쇄', '', '카드별 월별 사용집계표 · 사용내역 명세'), MI('rcPrint', '증빙철 인쇄', 'data-src="card"', '사진 영수증 + 사진 없는 내역의 붙임 칸'), MI('prepayDoc', '선결제 지출결의서', '', '카드·기간 사용 합계 한 줄 (회사 양식)'), MI('photoPrint', '입고사진 정리 (인쇄·PDF)', '', '날짜별 소모품·비품 사진')])
-    + MENU('저장', [MI('exportCard', '엑셀로 저장', '', '집계표 · 카드별 지출내역'), MI('photoPpt', '입고사진 PPT 파일', '', '파워포인트 (슬라이드마다 1건)')]))}
+    + MENU('저장', [MI('exportCard', '엑셀로 저장', '', '집계표 · 카드별 지출내역'), MI('photoPpt', '입고사진 PPT 파일', '', '파워포인트 (슬라이드마다 1건)')])
+    + MORE([MI('ocrRc', '영수증 사진 올리기', 'data-src="card"', '여러 장을 한 번에 → 금액·날짜로 맞는 내역에 자동 연결 (줄을 누르고 Ctrl+V·끌어다 놓기도 됨)'), MI('addTx', '+ 직접 입력', 'data-src="card"', '엑셀에 없는 카드 사용 한 줄 추가'), MI('autoCat', '자동 분류', '', '빈 세목 채우기 (엑셀 불러올 때 자동으로 함)')]))}
     ${dupBanner('card')}${limitBanner}${cardPmBanner(ym)}
     <div class="sumbar">
       <div class="sb"><span>건수</span><b>${list.length}건</b></div>
@@ -67,7 +68,7 @@ function viewCard() {
     </div>
     <div class="issuebar">${(() => { const on = Object.entries(ISSUE).filter(([k]) => issues[k] || state.cardIssue === k);
     return on.length ? `<span class="ib-l">남은 일</span><button class="ib ${state.cardIssue ? '' : 'active'}" data-act="cardIssue" data-v="">전체 보기</button>${on.map(([k, v]) => `<button class="ib warn ${state.cardIssue === k ? 'active' : ''}" data-act="cardIssue" data-v="${k}" ${v.title ? `title="${v.title}"` : ''}>${v.label} <b>${issues[k]}</b></button>`).join('')}`
-      : '<span class="ib ok">✓ 남은 일 없음 — 정산 준비 끝</span>'; })()}</div>
+      : list.length ? '<span class="ib ok">✓ 남은 일 없음 — 정산 준비 끝</span>' : '<span class="ib warn">아직 이 기간 카드 내역이 없습니다 — [카드사 엑셀 불러오기]부터</span>'; })()}</div>
     ${quickBar(['중식/', '석식/', '간식/'], list.length ? `<button class="btn sm danger" data-act="delSelTx" style="margin-left:8px;flex:none;${selN ? '' : 'visibility:hidden'}" title="오른쪽 끝 칸에서 체크한 내역 삭제">선택한 ${selN}건 삭제</button>` : '')}
     <div class="tbl-wrap"><table class="t tight"><thead><tr><th>#</th><th>일자</th><th>시간</th><th>카드</th><th>가맹점</th><th>금액</th><th>세목</th><th>사용내역 (구분/사용자)</th>${claimOn() ? '<th title="시행사 청구 가능">청구</th>' : ''}<th>영수증</th><th class="center nowrap">${list.length ? `<input type="checkbox" ${selAll ? 'checked' : ''} data-ch="cardSelAll" title="전체 선택 / 해제">` : ''}</th></tr></thead>
       <tbody>${rows || `<tr><td colspan="${claimOn() ? 11 : 10}" class="center muted" style="padding:30px">이 달의 카드 내역이 없습니다. 카드사 홈페이지에서 받은 엑셀 파일을 <b>카드사 엑셀 불러오기</b>로 넣으세요.</td></tr>`}</tbody></table></div>

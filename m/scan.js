@@ -507,7 +507,8 @@ const Scan = (() => {
     if (!styled) { const s = document.createElement('style'); s.textContent = css; document.head.appendChild(s); styled = true; }
     let src = await loadCanvas(file);
     for (let r = 0; r < ((prev && prev.rot) || 0); r++) src = rotate(src);
-    let quad = prev && prev.quad ? prev.quad.map(p => p.slice()) : detect(src), rot = (prev && prev.rot) || 0;
+    // opt.full: 이미 잘라 펴진 사진(휴대폰에서 편집해 보낸 것) → 다시 찾지 않고 사진 전체에서 시작 (안쪽 글자 덩어리를 영수증으로 잘못 잡음)
+    let quad = prev && prev.quad ? prev.quad.map(p => p.slice()) : opt.full ? full(src) : detect(src), rot = (prev && prev.rot) || 0;
     let mode = (prev && prev.mode) || localStorage.getItem('ysm.scanMode') || 'doc';
     if (!MODES.some(m => m[0] === mode)) mode = 'doc';
     const touch = matchMedia('(pointer:coarse)').matches;

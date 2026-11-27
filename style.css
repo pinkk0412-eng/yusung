@@ -31,6 +31,8 @@ a{color:var(--accent)}
 .right{text-align:right}
 .center{text-align:center}
 .hint{font-size:12px;color:var(--muted);margin:8px 2px 14px}
+/* [설명 글 숨기기] (18 hintTopBtn): 사용법 글만 숨김 — 버튼·링크가 든 안내줄(할 일·바로가기)·경고는 그대로 */
+body.nohint .hint, body.nohint .phd-guide, body.nohint .qb-h, body.nohint .banner.info:not(:has(button, a, input, select)){display:none}
 
 /* ---------- 화면 틀: 위 막대 · 왼쪽 메뉴 · 본문 ---------- */
 .topbar{position:sticky;top:0;z-index:25;display:flex;align-items:center;gap:16px;height:var(--top);padding:0 20px 0 0;background:#fff;border-bottom:1px solid var(--line)}

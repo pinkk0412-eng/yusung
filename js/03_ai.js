@@ -152,7 +152,7 @@ async function ocrReceipts(src, files, opt = {}) {
       const hint = opt.hintOf && opt.hintOf(imgs[i]);
       if (hint) found.forEach(rc => { if (!rc.date && hint.date) rc.date = hint.date; if (!rc.amount && hint.amount && found.length === 1) rc.amount = hint.amount; if (!rc.memo && hint.memo) rc.memo = hint.memo; });
       const url = URL.createObjectURL(imgs[i]);
-      found.forEach(rc => list.push({ file: imgs[i], url, ...rc }));
+      found.forEach(rc => list.push({ file: imgs[i], url, ...rc, cut: !!(hint && hint.cut) }));   // cut = 휴대폰에서 이미 잘라 보낸 사진
     }
   } catch (e) { closeModal(); toast('글자 인식을 시작할 수 없습니다: ' + e.message); return; }
   // 후보: 같은 종류(카드/전도금) 지출, 작업월 앞뒤 한 달
@@ -225,7 +225,7 @@ async function ocrReceipts(src, files, opt = {}) {
   root.querySelectorAll('[data-ocrimg]').forEach(img => img.onclick = () => { const b = root.querySelector(`[data-ocrscan="${img.dataset.ocrimg}"]`); if (b) b.click(); else window.open(img.src, '_blank'); });
   root.querySelectorAll('[data-ocrscan]').forEach(b => b.onclick = async () => {   // 스캔 편집 → 같은 사진을 쓰는 줄 모두 편집한 사진으로 (rc.orig = 원래 파일: 10c 휴대폰 사진함에서 지울 때 씀)
     const rc0 = list[+b.dataset.ocrscan], old = rc0.file, src0 = rc0.orig || old;   // 다시 고칠 때도 원래 사진에서 (모서리 위치는 원래 사진 기준)
-    let r; try { r = await Scan.open(src0, rc0.scanEdit, { delLabel: '취소' }); } catch (e) { toast('스캔 편집을 열지 못했습니다: ' + e.message); return; }
+    let r; try { r = await Scan.open(src0, rc0.scanEdit, { delLabel: '취소', full: rc0.cut }); } catch (e) { toast('스캔 편집을 열지 못했습니다: ' + e.message); return; }
     if (!r || !r.blob) return;
     const nf = new File([r.blob], (src0.name || '영수증').replace(/\.[^.]+$/, '') + '_스캔.jpg', { type: 'image/jpeg' }), url = URL.createObjectURL(nf);
     list.forEach((rc, i) => { if (rc.file !== old) return; rc.orig = rc.orig || old; rc.file = nf; rc.url = url; rc.scanEdit = r.edit; const im = root.querySelector(`[data-ocrimg="${i}"]`); if (im) im.src = url; });

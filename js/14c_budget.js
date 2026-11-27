@@ -72,13 +72,15 @@ const SOLO = { b: null, dirty: false };
 const bgSoloOn = () => !!state.bgSolo && !FS.ready;
 function bgNew(name) {
   const s = bgSoloOn() ? null : site();
-  return {
-    v: BG_VER, title: `${name || (s && (s.fullName || s.name)) || '○○'} 예산심의(案)`, site: (s && s.name) || name || '', author: '', date: todayStr(), start: '', open: '', fcfs: '',
-    phases: BG_PH0.map(name => ({ name, from: '', to: '' })), punit: '천원', households: '', feeTotal: '', support: { rate: '', cap: '', note: '' },
+  const B = {   // 투입일·세대수는 설정(현장 정보)에 적은 값으로 시작 — 같은 것을 두 번 넣지 않게
+    v: BG_VER, title: `${name || (s && (s.fullName || s.name)) || '○○'} 예산심의(案)`, site: (s && s.name) || name || '', author: '', date: todayStr(), start: (s && s.inDate) || '', open: '', fcfs: '',
+    phases: BG_PH0.map(name => ({ name, from: '', to: '' })), punit: '천원', households: s && s.totalUnits ? String(s.totalUnits) : '', feeTotal: '', support: { rate: '', cap: '', note: '' },
     notes: '상기 예산(案)은 견본주택 오픈일 기준으로 작성함 (오픈 일정 연기 등으로 예산 변동 가능성 있음).\n단위: 원, VAT 별도',
     items: BG_TPL.map(([acc, grp, name, unit, price]) => ({ id: uid(), acc, grp, name, unit, qty: '', d: ['', '', ''], price: price || '', memo: '' })),
     status: '작성중', moves: [],
   };
+  if (B.start) bgSyncPh(B);
+  return B;
 }
 function bgDoc() { if (bgSoloOn()) return SOLO.b; const s = db.sites.find(x => x.id === db.cur); return s ? s.budget || null : null; }
 function bgTouch() { if (bgSoloOn()) { SOLO.dirty = true; try { localStorage.setItem(BG_SOLO_KEY, JSON.stringify({ b: SOLO.b, dirty: true })); } catch (e) { } } }
@@ -165,9 +167,9 @@ function viewBudgetNone() {
 function viewBudgetMain(B, sub) {
   return `${pageHead(`${esc(site().name)}현장 예산 ${bgStBadge(B)}`, `${esc(B.title || '')}${B.author ? ` · 작성 ${esc(B.author)}` : ''}${B.date ? ` · ${bgDot(B.date)}` : ''} · 최초 예산 ${fmt(bgTotal(B))}원 (VAT 별도)`,
     (bgLocked(B) ? BTN('bgMovePm', '전용·증액 품의 작성', '', 'primary') : BTN('bgApprove', '결재완료로', 'title="결재가 끝나면 누르세요 — 예산이 잠기고 전용·증액 품의로만 바뀝니다"', 'primary'))
-    + BTN('bgFileIn', '📥 예산안 파일 가져오기', bgLocked(B) ? 'disabled title="결재된 예산은 바꿀 수 없습니다"' : '')
     + MENU('인쇄', [MI('bgPrint', '예산심의(案) 인쇄', '', '갑지·세부내역·집계표'), MI('bgPrintExec', '예산 대비 집행 인쇄', '', '최초·전용·현재·집행')])
-    + MENU('저장', [MI('bgFileOut', '예산안 파일로 저장 (.xlsx)', '', '회사 양식 + 프로그램이 다시 읽는 원본'), MI('bgExecXl', '예산 대비 집행 엑셀')]))}
+    + MENU('저장', [MI('bgFileOut', '예산안 파일로 저장 (.xlsx)', '', '회사 양식 + 프로그램이 다시 읽는 원본'), MI('bgExecXl', '예산 대비 집행 엑셀')])
+    + MORE([MI('bgFileIn', '📥 예산안 파일 가져오기', bgLocked(B) ? 'disabled' : '', bgLocked(B) ? '결재된 예산은 바꿀 수 없습니다' : '본부장님이 보낸 예산안 파일(.xlsx)·예전 엑셀 예산안')]))}
     ${bgBar(B)}
     ${sub === 'exec' ? bgExecView(B) : sub === 'cal' ? bgCalView(B) : sub === 'info' ? bgInfoView(B) : bgEditView(B)}`;
 }
@@ -208,7 +210,7 @@ function bgEditView(B) {
       const warn = !lock && amt && !bgN(it.price) && !it.fix ? ' class="bad-row"' : '';
       return `<tr${warn} data-bgid="${it.id}"><td style="white-space:nowrap">${lock ? '' : '<span class="bg-grip" draggable="true" title="끌어서 순서 바꾸기 (같은 계정 안)">⠿</span>'}${c('grp', it.grp, 'bg-g')}</td><td>${c('name', it.name, 'bg-n')}</td>
         <td>${c('price', fmt0(it.price), 'num bg-p')}</td>
-        ${bgIsCal(it) ? (() => {   // 날짜별 일정 줄(인건비 일급·월급 + 날짜로 넣기로 한 줄) = 수량은 날짜별 일정에서만 · 여기는 가장 많은 날 수량과 단계별 합만 보여 줌
+        ${bgHasSched(it) ? (() => {   // 날짜별로 넣은 줄 = 수량은 날짜별 일정에서만 · 여기는 가장 많은 날 수량과 단계별 합만 보여 줌 (안 넣은 줄은 아래처럼 인원 × 일수를 바로 침 — 엑셀처럼, 11/25)
           const sp = bgHasSched(it) ? bgSchedPh(B, it) : { ph: P.map((_, i) => bgN(it.qty) * bgN((it.d || [])[i])), outside: 0 }, hd = bgHead(it), w = bgQW(it);
           return `<td class="num"><a href="#" data-act="bgSub" data-v="cal" title="${w.n}은 [날짜별 일정]에서 날짜마다 넣습니다 — 여기는 가장 많은 날의 ${w.n}">${hd ? `${fmtQty(hd)}${w.u}` : '📅 넣기'}</a>${sp.outside ? '<div class="bad small">단계 밖 날짜</div>' : ''}</td>
           ${sp.ph.map((v, i) => `<td class="num muted small" title="${esc(P[i].name)} ${w.n} 합 (날짜별 일정)">${v ? `${fmtQty(v)}${w.t}` : '-'}</td>`).join('')}`; })()
@@ -341,7 +343,7 @@ function bgCh(kind, el) {
   else if (kind === 'ph') B.phases[+el.dataset.i][f] = v;
   else if (kind === 'item') {
     const it = B.items.find(x => x.id === el.dataset.id); if (!it) return;
-    if ((/^d\d$/.test(f) || f === 'qty') && bgIsCal(it)) return;   // 날짜별 일정 줄의 수량은 거기서만
+    if ((/^d\d$/.test(f) || f === 'qty') && bgHasSched(it)) return;   // 날짜별로 넣은 줄의 수량은 거기서만 (안 넣었으면 엑셀처럼 인원 × 일수를 바로 침)
     if (/^d\d$/.test(f)) { it.d = it.d || []; it.d[+f.slice(1)] = v === '' ? '' : toNum(v); delete it.fix; }
     else if (f === 'qty' || f === 'price') { it[f] = v === '' ? '' : toNum(v); delete it.fix; }
     else if (f === 'claim') { if (el.checked) it.claim = true; else { delete it.claim; delete it.claimCap; } }   // 실비청구 가능 · 한도
@@ -376,7 +378,7 @@ const BG_ACT = {
   bgCalGo: el => bgCalGo(el.dataset.step ? null : +el.dataset.c, +el.dataset.step || 0),
   bgCalOnly: () => { state.bgCalOnly = !state.bgCalOnly; state.bgSel = null; render(); },
   bgCalOff: el => bgCalToggle(el.dataset.id, false),
-  bgCreate: () => { site().budget = bgNew(); save(); render(); toast('새 예산을 만들었습니다. 쓰지 않는 줄은 [빈 줄 모두 빼기]로 정리하세요.'); },
+  bgCreate: () => { site().budget = bgNew(); save(); render(); toast('새 예산을 만들었습니다. 쓸 줄에 단가·인원·일수만 넣으세요 (안 쓴 줄은 결재완료 때 자동으로 빠짐).'); },
   bgItemAdd: el => {
     const B = bgDoc(); if (!B || bgLocked(B)) return;
     const at = el.dataset.id ? B.items.findIndex(x => x.id === el.dataset.id) : -1, base = at >= 0 ? B.items[at] : null;
@@ -399,7 +401,8 @@ const BG_ACT = {
       <div class="form-grid"><label>결재일<input type="date" id="bgApD" value="${todayStr()}"></label><label>결재본 스캔 (선택)<input type="file" id="bgApF" accept="image/*,.pdf" multiple></label></div>`, [{ label: '취소' }, { label: '결재완료로 잠그기', cls: 'primary', onClick: async root => {
       const scans = [];
       for (const f of [...root.querySelector('#bgApF').files]) { try { scans.push(await storeFile(parts(DIR.pmScan), safeName(`${site().name}현장 예산심의 결재본`), f)); } catch (e) { toast('스캔본을 저장하지 못했습니다: ' + e.message); } }
-      B.status = '결재완료'; B.approved = { date: root.querySelector('#bgApD').value || todayStr(), scans }; save(); render(); toast('예산을 결재완료로 잠갔습니다.');
+      const n0 = B.items.length; B.items = B.items.filter(it => bgAmt(B, it) || String(it.memo || '').trim());   // 금액 없는 기본 항목 줄은 잠글 때 자동으로 빼기 ([빈 줄 모두 빼기]를 따로 안 눌러도 됨)
+      B.status = '결재완료'; B.approved = { date: root.querySelector('#bgApD').value || todayStr(), scans }; save(); render(); toast(`예산을 결재완료로 잠갔습니다.${n0 > B.items.length ? ` (금액 없는 줄 ${n0 - B.items.length}개는 뺌)` : ''}`);
     } }], 's');
     return r;
   },

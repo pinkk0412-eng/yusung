@@ -56,6 +56,12 @@ function assetDialog(a0) {
     } }]);
   // 증빙 사진: 창을 다시 열지 않고 그 자리에서 작은 그림으로 (새 자산도 [추가] 전에 넣을 수 있음 — [추가] 때 같이 저장)
   const phs = a0 ? (a0.photos = a0.photos || []) : [], box = $('#asPhs', r);
+  // 업체를 적으면 그 업체의 품의서를 자동으로 고름 (품의서를 안 골랐을 때만 · 가장 최근 것)
+  $('#asV', r).addEventListener('change', () => {
+    const sel = $('#asPm', r), v = $('#asV', r).value.trim().replace(/\s/g, ''); if (!sel || sel.value || !v) return;
+    const hit = pmAll().filter(p => String(p.vendor || '').replace(/\s/g, '') === v).sort((x, y) => (toNum(y.no) || 0) - (toNum(x.no) || 0))[0];
+    if (hit && [...sel.options].some(o => o.value === hit.id)) { sel.value = hit.id; toast(`품의서 ${hit.no}번(${hit.title || ''})을 골랐습니다.`); }
+  });
   const drawPh = async () => {
     if (!phs.length) { box.innerHTML = `<span class="small ${['구입', '임차'].includes(a.kind) ? 'bad' : 'muted'}">등록한 사진 없음</span>`; return; }
     box.innerHTML = phs.map((p, i) => `<div style="position:relative;width:96px;height:96px;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#f4f4f4"><img data-asphv="${i}" alt="" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in"><a href="#" data-asphdel="${i}" title="사진 빼기" style="position:absolute;top:2px;right:2px;background:#fff;border-radius:50%;width:20px;height:20px;line-height:20px;text-align:center;text-decoration:none">✕</a></div>`).join('');

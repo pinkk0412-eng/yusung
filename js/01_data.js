@@ -147,7 +147,7 @@ function pwDialog(title, html, onOk) {   // 비밀번호 입력 창
 const siteNames = sids => sids.map(id => (db.sites.find(x => x.id === id) || {}).name || '').filter(Boolean).join(', ');
 function secUnlockDialog(go) {   // go = 잠긴 탭을 눌러서 연 경우 → 풀리면 그 탭으로
   const sid = db.cur, others = db.sites.filter(x => x.id !== sid && secOn(x.id) && !SEC.keys[x.id]).length;
-  pwDialog('관리자 잠금 해제', `<p class="small"><b>${esc(site().name)}</b> 현장의 손익·급여(유성 정직원·기획 등)를 보려면 이 현장 관리자 비밀번호를 넣으세요.${others ? ` 같은 비밀번호를 쓰는 다른 현장도 함께 풀립니다.` : ''}</p><label class="small"><input type="checkbox" id="secRem"> 이 PC에서 계속 풀어 두기 (실무책임자 전용 PC에서만)</label>`, async root => {
+  pwDialog('관리자 잠금 해제', `<p class="small"><b>${esc(site().name)}</b> 현장의 예산·손익·비공개 급여(유성 정직원${String(secOpt().teams || '').trim() ? ' · ' + esc(secOpt().teams) : ''})를 보려면 이 현장 관리자 비밀번호를 넣으세요.${others ? ` 같은 비밀번호를 쓰는 다른 현장도 함께 풀립니다.` : ''}</p><label class="small"><input type="checkbox" id="secRem"> 이 PC에서 계속 풀어 두기 (실무책임자 전용 PC에서만)</label>`, async root => {
     const pw = $('#secPw', root).value; if (!pw) return false;
     const mine = await secUnlockWith(pw, [sid]);
     if (!mine.length) { toast('이 현장 비밀번호가 맞지 않습니다.'); return false; }
@@ -251,7 +251,7 @@ async function rcInit() {   // 시작할 때: 이 PC에 고른 영수증 폴더�
   const h = await Promise.race([idb.get('rcRoot'), new Promise(r => setTimeout(() => r(null), 2000))]).catch(() => null);
   if (!h) return;
   RC.root = h; RC.want = true;
-  try { RC.ready = (await h.queryPermission({ mode: 'readwrite' })) === 'granted'; } catch (e) { RC.ready = false; }
+  RC.ready = (await permQ(h)) === 'granted';
 }
 async function rcReopen() {
   if (!RC.root) return rcPick();

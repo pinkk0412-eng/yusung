@@ -9,7 +9,7 @@ function u200Dialog(t) {
   const att0 = u.attendees ?? String(t.memo || '').replace(/^[^/]{1,6}\//, '').trim();
   const read = root => { t.u200 = { person: $('#u2Person', root).value.trim(), date: $('#u2Date', root).value || t.date, purpose: $('#u2Purpose', root).value.trim(), attendees: $('#u2Att', root).value.trim(), place: $('#u2Place', root).value.trim() }; if (t.u200.person) site().u200Person = t.u200.person; };
   modal(`법인카드 사용내역서 (20만원 이상) — ${t.date} ${t.merchant || ''} ${fmt(t.amount)}원`, `<div class="form-grid">
-      <label>담당자 (직책 이름)<input id="u2Person" value="${esc(u.person ?? s.u200Person ?? '')}" placeholder="예) 대리 홍길동"></label>
+      <label>담당자 (직책 이름)<input id="u2Person" value="${esc(u.person ?? s.u200Person ?? String(s.manager || '').replace(/\s*\/\s*/g, ' ').trim())}" placeholder="예) 대리 홍길동"></label>
       <label>사용일자<input id="u2Date" type="date" value="${esc(u.date || t.date)}"></label>
       <label style="grid-column:span 2">사용목적 (수집정보 등)<input id="u2Purpose" value="${esc(u.purpose || '')}" placeholder="예) 현장 단합을 위한 회식 진행"></label>
       <label style="grid-column:span 2">내용 (참석자 — 소속별로 이름·직책)<textarea id="u2Att" rows="3" placeholder="예) 시행사 : 홍길동 소장&#10;유성 : 김철수 상무, 이영희 대리">${esc(att0)}</textarea></label>
@@ -190,6 +190,8 @@ function docCashClaim(ym, docNo, date) {
       <tr class="r9"><td colspan="2">주간소계</td><td colspan="3" class="n">${dashN(reqTotal)}</td><td colspan="3" class="n">${dashN(cs.out)}</td><td>잔액</td><td class="n">${dashN(cs.balance)}</td></tr>
       <tr class="r9"><td colspan="2">월간누계</td><td colspan="8" class="n">${dashN(cs.out)}</td></tr>
       <tr class="r9"><td colspan="2">총 누 계</td><td colspan="8" class="n">${dashN(cs.total)}</td></tr>
+      <tr class="r9"><td colspan="2">전도금외 결제내역</td><td colspan="6"></td><td colspan="2"></td></tr>
+      <tr class="r9"><td colspan="2">소${'&nbsp;'.repeat(5)}계</td><td colspan="6" class="n">-</td><td colspan="2"></td></tr>
       <tr class="r9"><td colspan="2">합${'&nbsp;'.repeat(5)}계</td><td colspan="6" class="n">${dashN(cashClaimAmt(ym))}</td><td colspan="2"></td></tr></table></div>`;
 }
 /* 전도금 집행내역 — 회사 양식 (엑셀 "전도금지출내역" 시트 A~K열, A4 가로): 그 달 내역 + 노란 누계 줄 */
@@ -217,7 +219,7 @@ function apprBoxCard(s) {
       <tr>${ap.map(a => `<td class="nm">${esc(a.name)}</td>`).join('')}</tr>
       <tr>${ap.map(a => `<td class="sg ${a.name ? '' : 'x'}"></td>`).join('')}</tr>
       <tr>${ap.map(a => `<td class="sg2 ${a.name ? '' : 'x2'}"></td>`).join('')}</tr>
-      <tr><td colspan="${Math.max(1, ap.length)}" class="mgrn"><b class="mgr">실무책임자</b><span class="mgr-nm">${esc(s.manager || '')}</span>${signHtml()}</td></tr></table>`;   // 샘플 결재란 12행: 한 칸에 "실무책임자 직급 / 이름 (서명)"
+      <tr><td colspan="${Math.max(1, ap.length)}" class="mgrn"><b class="mgr">실무책임자</b> <span class="mgr-nm">${esc(s.manager || '')}</span>${signHtml()}</td></tr></table>`;   // 샘플 결재란 12행: 한 칸에 "실무책임자 직급 / 이름 (서명)"
 }
 function cardIdsOf(ym) {
   const all = txOf(ym, 'card');
@@ -296,14 +298,15 @@ function fcHead({ docNo, date, period, title }) {
 const fcPage = (head, body) => `<div class="doc pf"><div class="pf-frame">${head}<div class="pf-body fc-body">${body}</div></div></div>`;
 const fcAttach = list => `<div class="pf-sec"><span class="pf-no">2.</span><span><b>첨부서류</b></span></div><div class="pf-line">- ${esc(list)}. -끝-</div>`;
 
-// 인건비 자금청구서 (회사 양식 · 결재 스캔본 "98. 5월분 인건비"): 전전월 실지급액 계 · 전월 유성 + 이번 달(유성/시행사/실지급액 계)
+// 인건비 자금청구서 (회사 양식 · 최근 결재 스캔본 "134. 8월분 인건비"): 지난 두 달 실지급액 계 + 이번 달(유성/시행사/실지급액 계)
+//   (예전 "98. 5월분"은 전월이 '유성'이었으나 최근 결재본 기준으로 통일 — 11/25 사용자 확인)
 // 칸에 안 들어가는 글자는 줄여서 한 칸에 (엑셀 "축소하여 전체 표시"): cap = 그 칸에 들어가는 한글 글자 수(영문·숫자는 0.55자) · base = 원래 글자 크기(px)
 const fitStyle = (t, cap, base, min = 6.5) => { const n = [...String(t || '')].reduce((a, ch) => a + (/[\u0000-ÿ]/.test(ch) ? 0.55 : 1), 0); return n > cap ? ` style="font-size:${Math.max(min, base * cap / n).toFixed(1)}px"` : ''; };
 function docPayClaim(ym, docNo, date) {
   const s = site(), m = monthNo(ym);
   const key = g => `${g.company}|${g.team}`;
   const cur = payGroups(payRows(db.cur, ym, true).filter(r => r.rec.payType !== '제외'));
-  const prevs = [ymAdd(ym, -2), ymAdd(ym, -1)].map((p, pi) => { const gs = payGroups(payRows(db.cur, p, false).filter(r => r.rec.payType !== '제외')); return { ym: p, head: pi ? '유성' : '실지급액 계', map: Object.fromEntries(gs.map(g => [key(g), pi ? g.ys : g.ys + g.sh])) }; });
+  const prevs = [ymAdd(ym, -2), ymAdd(ym, -1)].map((p, pi) => { const gs = payGroups(payRows(db.cur, p, false).filter(r => r.rec.payType !== '제외')); return { ym: p, head: '실지급액 계', map: Object.fromEntries(gs.map(g => [key(g), g.ys + g.sh])) }; });
   const keys = [...new Set([...prevs.flatMap(p => Object.keys(p.map)), ...cur.map(key)])];
   const label = g => `${g.team}${g.names && g.names.length ? `(${g.names.length > 2 ? `${g.names[0]} 외 ${g.names.length - 1}명` : g.names.join(',')})` : ''}`;
   const fitTxt = t => fitStyle(t, 10, 12.5, 8);   // 칸에 안 들어가면 글자 줄임 (엑셀 "축소하여 전체 표시")
@@ -319,7 +322,7 @@ function docPayClaim(ym, docNo, date) {
         <tr><th rowspan="2">번호</th><th rowspan="2">업체명</th><th rowspan="2">구분</th>${prevs.map(p => `<th>${monthNo(p.ym)}월</th>`).join('')}<th colspan="3" class="cur t">${m}월</th></tr>
         <tr>${prevs.map(p => `<th>${p.head}</th>`).join('')}<th class="cur l">유성</th><th class="cur">시행사</th><th class="cur r">실지급액 계</th></tr>
         ${rows || '<tr><td colspan="8" class="center">-</td></tr>'}
-        <tr class="fc-sum"><td colspan="3" class="center"><b>합계</b></td>${prevs.map(p => `<td class="num"><b>${fmt0(sum(Object.values(p.map)))}</b></td>`).join('')}<td class="num cur l b2"><b>${fmt0(T(g => g.ys))}</b></td><td class="num cur b2"><b>${fmt0(T(g => g.sh))}</b></td><td class="num cur r b2"><b>${fmt0(T(g => g.ys + g.sh))}</b></td></tr>
+        <tr class="fc-sum"><td colspan="3" class="center"><b>합계</b></td>${prevs.map(p => `<td class="num"><b>${dashN(sum(Object.values(p.map)))}</b></td>`).join('')}<td class="num cur l b2"><b>${dashN(T(g => g.ys))}</b></td><td class="num cur b2"><b>${dashN(T(g => g.sh))}</b></td><td class="num cur r b2"><b>${dashN(T(g => g.ys + g.sh))}</b></td></tr>
       </table></div>
       ${fcAttach('영업팀 출근부, 세부내역서, 자금청구서, 지출결의서')}`;
   return fcPage(fcHead({ docNo, date, period: `${ym.replace('-', '.')}.01.~${ym.replace('-', '.')}.${daysIn(ym)}.`, title: `${s.name}현장 ${m}월분 인건비 청구의 건` }), body);
@@ -349,7 +352,7 @@ function docFundClaim(ym, docNo, date) {
         <tr>${prevYms.map(() => '<th>합계</th>').join('')}<th class="cur l">유성</th><th class="cur">시행사</th><th class="cur r">합계</th></tr>`
         : `<tr><th></th><th>과목</th><th>업체명</th><th>거래내역</th>${prevYms.map(p => `<th>${monthNo(p)}월 집행</th>`).join('')}<th class="cur t">${m}월 집행</th><th>참조문서</th><th>비고</th></tr>`}
         ${rows || `<tr><td colspan="${widths.length}" class="center">-</td></tr>`}
-        <tr class="fc-sum"><td colspan="4" class="center"><b>합계</b></td>${prevRows.map(pr => `<td class="num"><b>${fmt0(sum(Object.values(pr), tot))}</b></td>`).join('')}${showSh ? `<td class="num cur l b2"><b>${fmt0(t.ys)}</b></td><td class="num cur b2"><b>${fmt0(t.sh)}</b></td><td class="num cur r b2"><b>${fmt0(t.total)}</b></td>` : `<td class="num cur l r b2"><b>${fmt0(t.ys)}</b></td>`}<td></td><td></td></tr>
+        <tr class="fc-sum"><td colspan="4" class="center"><b>합계</b></td>${prevRows.map(pr => `<td class="num"><b>${dashN(sum(Object.values(pr), tot))}</b></td>`).join('')}${showSh ? `<td class="num cur l b2"><b>${dashN(t.ys)}</b></td><td class="num cur b2"><b>${dashN(t.sh)}</b></td><td class="num cur r b2"><b>${dashN(t.total)}</b></td>` : `<td class="num cur l r b2"><b>${dashN(t.ys)}</b></td>`}<td></td><td></td></tr>
       </table></div>
       ${fcAttach('자금청구서, 지출결의서, 거래명세서, 세금계산서 등')}`;
   return fcPage(fcHead({ docNo, date, period: '', title: `${s.name}현장 ${m}월 경비 청구의 건` }), body);

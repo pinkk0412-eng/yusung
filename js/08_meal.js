@@ -209,7 +209,8 @@ const subTabs = (list, cur, act) => `<div class="subtabs">${list.map(([k, l]) =>
 function viewMeal() {   // 출근부 탭
   const g = mealTop(), ym = state.ym;
   const head = pageHead(`${ymLabel(ym)} 출근부`, '1일 ~ 말일 · 익월 초 정산 → 인건비 반영',
-    BTN('importAtt', '출근부·근태기록 불러오기', 'title="얼굴인식 근태기록 엑셀 또는 기존 출근부 엑셀"', 'primary') + BTN('repOpen', '출퇴근보고 만들기', 'title="출근부로 카톡 출퇴근보고 문구 만들기"') + BTN('attPhotoPrint', `출근 사진 인쇄${attPhotoCount(ym) ? ` (${attPhotoCount(ym)}장)` : ''}`, 'title="출근부 칸에 오른쪽 클릭으로 등록한 이 달 사진을 A4 한 장에 4장씩 인쇄"') + BTN('exportMeal', '엑셀로 저장', 'title="출근부·식대내역·결제내역·캐터링·인건비 반영 요약"'));
+    BTN('importAtt', '출근부·근태기록 불러오기', 'title="얼굴인식 근태기록 엑셀 또는 기존 출근부 엑셀"', 'primary') + BTN('repOpen', '출퇴근보고 만들기', 'title="출근부로 카톡 출퇴근보고 문구 만들기"') + BTN('exportMeal', '엑셀로 저장', 'title="출근부·식대내역·결제내역·캐터링·인건비 반영 요약"')
+    + MORE([MI('attPhotoPrint', `출근 사진 인쇄${attPhotoCount(ym) ? ` (${attPhotoCount(ym)}장)` : ''}`, '', '출근부 칸에 오른쪽 클릭으로 등록한 이 달 사진을 A4 한 장에 4장씩')]));
   if (state.mealSub === 'meal') state.mealSub = 'att';   // 식대내역은 식대·캐터링 탭으로
   const subs = [['att', '출근부'], ...(g === '정직원' ? [] : [['sum', '인건비 반영 요약']]), ['set', '⚙ 설정 (출근 기준·식대 단가)']];   // 유성 정직원은 요약 없음 (본사 지급)
   const sub = subs.some(x => x[0] === state.mealSub) ? state.mealSub : 'att';
@@ -392,7 +393,8 @@ function setTeamPay(team, f, v) {   // f = rate | payType | company · 같은 �
   let r = teamRateEntry(team); const old = r ? r[f] : undefined;
   if (!r) { r = { job: team, company: '', payType: '', rate: '', meal: '' }; st.rateTable.push(r); }
   r[f] = v;
-  const same = x => x === undefined || x === '' || x === null || x === old || (f === 'rate' && toNum(x) === toNum(old) && old !== '' && old !== undefined);
+  // 단가 0 = 아직 안 정함 (인건비 탭을 먼저 열면 이 달 기록이 단가 0 으로 만들어짐 → 구분 단가가 안 들어가던 문제)
+  const same = x => x === undefined || x === '' || x === null || x === old || (f === 'rate' && (!toNum(x) || (toNum(x) === toNum(old) && old !== '' && old !== undefined)));
   let n = 0;
   siteStaff(true).filter(p => p.kind === '현장' && teamRateEntry(p.team) === r).forEach(p => {
     p.pay = p.pay || {}; let hit = false;

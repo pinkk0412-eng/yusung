@@ -122,7 +122,7 @@ async function send() {
     for (let i = 0; i < n; i++) {
       setBusy(`사진 준비 ${i + 1} / ${n}`);
       const ph = S.photos[i], { blob, ext } = ph.blob ? { blob: ph.blob, ext: 'jpg' } : (ph.prep && await ph.prep) || await shrink(ph.file);   // 편집한 사진은 이미 알맞은 크기 · 아니면 미리 줄여 둔 것
-      const meta = { v: 1, l: cfg.l, site, siteName: siteName(site), kind: me.kind, date: S.date, amount: amt, memo: S.memo.trim(), by: me.name, at: new Date().toISOString(), batch, n: i + 1, of: n, ext };
+      const meta = { v: 1, l: cfg.l, site, siteName: siteName(site), kind: me.kind, date: S.date, amount: amt, memo: S.memo.trim(), by: me.name, at: new Date().toISOString(), batch, n: i + 1, of: n, ext, cut: !!ph.blob };   // cut = 이미 잘라 폄 (PC 편집 창은 사진 전체에서 시작)
       await qdb.add({ id: `${batch}_${i + 1}`, blob, meta });
     }
   } catch (e) { S.busy = false; toast('사진을 저장하지 못했습니다: ' + e.message); render(); return; }

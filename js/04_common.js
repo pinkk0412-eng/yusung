@@ -98,6 +98,10 @@ const idb = {
     catch (e) { return `${e.name || ''}: ${e.message || e}`; }
   },
 };
+// 폴더 권한 확인 — 옮겼거나 지운 폴더면 크롬이 답을 안 하고 멈춤 → 1.5초 뒤 'hang' (시작이 멈춰 첫 화면에 갇히던 문제)
+function permQ(h, mode = 'readwrite') {
+  return Promise.race([h.queryPermission({ mode }).catch(() => 'denied'), new Promise(r => setTimeout(() => r('hang'), 1500))]);
+}
 
 /* ---------- 공통 UI ---------- */
 function toast(msg) {
@@ -245,6 +249,8 @@ const TAB_GUIDE = {
 const pageHead = (title, sub, actions) => `<div class="phd"><div class="phd-t"><h2>${title}</h2>${sub ? `<div class="phd-sub">${sub}</div>` : ''}${TAB_GUIDE[state.tab] ? `<div class="phd-guide">${TAB_GUIDE[state.tab]}</div>` : ''}</div><div class="phd-a">${actions || ''}</div></div>`;
 const BTN = (act, label, attrs = '', cls = '') => `<button class="btn ${cls}" data-act="${act}" ${attrs}>${label}</button>`;
 const MENU = (label, items) => `<details class="dd"><summary class="btn">${label} <span class="dd-car">▾</span></summary><div class="dd-m">${items.filter(Boolean).join('')}</div></details>`;
+// [⋯ 더보기]: 자주 안 쓰는 버튼을 모아 두는 메뉴 (윗줄 맨 끝) — 탭마다 매일·매달 쓰는 버튼만 밖에 남김 (11/25 "버튼이 많은데 실제로는 안 씀")
+const MORE = items => MENU('⋯ 더보기', items);
 const MI = (act, label, attrs = '', hint = '') => `<button class="dd-i" data-act="${act}" ${attrs}><span>${label}</span>${hint ? `<small>${hint}</small>` : ''}</button>`;
 /* 빠른 입력 버튼 — 사람마다(이 PC 브라우저에만) 고침: tpls = 버튼 글 목록 (끝이 / 면 말머리), names = 직원 이름 버튼도 보이기 (17 ACT.qbSet) */
 const QB_KEY = 'yusung_quickbar_v1';

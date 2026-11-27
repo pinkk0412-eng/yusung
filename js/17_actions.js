@@ -2,6 +2,12 @@
  * (원래 app.js 의 화면 부분. 모든 js/*.js 는 같은 전역 공간을 공유하며 html 에 적힌 순서대로 읽힘) */
 'use strict';
 
+/* [+ 지출]·엔터로 만들고 아무것도 안 적은 줄(금액·거래처·사용내역·세목·영수증 없음) 빼기 — 새 줄 만들 때·탭 옮길 때 (18 #tabs) */
+function dropBlankTx() {
+  const blank = t => t.siteId === db.cur && !t.amount && !String(t.merchant || '').trim() && !String(t.memo || '').trim() && !t.cat && !(t.receipts || []).length && !(t.photos || []).length && (t.memo !== '전도금 입금');
+  const n = db.tx.length; db.tx = db.tx.filter(t => !blank(t));
+  if (db.tx.length !== n) save();
+}
 
 /* ================= 이벤트: 클릭 ================= */
 const ACT = {
@@ -20,10 +26,11 @@ const ACT = {
   importCash: () => importCashFile(),
   addTx: el => {
     const src = el.dataset.src, ym = state.ym;
+    dropBlankTx();   // 앞서 만들고 비워 둔 줄은 정리 (빈 줄이 쌓이지 않게)
     const lastDate = (txOf(ym, src).map(t => t.date).sort().pop()) || (todayStr().startsWith(ym) ? todayStr() : `${ym}-01`);
     const t = { id: uid(), siteId: db.cur, src, kind: el.dataset.kind || 'out', date: lastDate, time: '', card: src === 'card' ? (state.cardFilter || (siteCards()[0] || {}).last4 || '') : '', merchant: '', amount: 0, cat: '', memo: el.dataset.kind === 'in' ? '전도금 입금' : '' };
     db.tx.push(t); save(); render();
-    const inp = view.querySelector(`[data-fid="m${t.id}"]`); if (inp) inp.focus();
+    const inp = view.querySelector(`[data-fid="${t.kind === 'in' ? 'a' : 'm'}${t.id}"]`) || view.querySelector(`[data-fid="m${t.id}"]`); if (inp) inp.focus();   // 전도금 입금은 금액 칸부터
     return t;   // 빠른 입력(chip)이 새 줄을 만들 때 씀
   },
   qbSet: () => {   // 빠른 입력 버튼 고치기 — 이 PC 브라우저에만 저장 (04 qbOpt)
@@ -172,7 +179,7 @@ const ACT = {
           const st = { id: uid(), siteId: db.cur, name: root.querySelector(`[data-uname="${i}"]`).value.trim() || p.name, team: root.querySelector(`[data-uteam="${i}"]`).value.trim(), title: '', active: true, kind: root.querySelector(`[data-ukind="${i}"]`).value, faceId: p.id };
           db.staff.push(st); p.staff = st;
         });
-        let marked = 0, notes = 0;
+        let marked = 0, notes = 0, times = 0;
         list.forEach(p => {
           if (!p.staff) return;
           if (p.id && !p.staff.faceId) p.staff.faceId = p.id;
@@ -185,13 +192,14 @@ const ACT = {
             if (has && !over && String(rec[d]) !== '휴무') { /* 손으로 입력한 값 유지 */ }
             else if (worked) { rec[d] = !x.inT && !x.outT && /사진/.test(x.note || '') ? ATT_PHOTO : '1'; marked++; if (!x.inT && !x.outT) notes++; }
             else if (markOff && !has) rec[d] = '휴무';
+            if (x.inT || x.outT || x.note) times++;
             if (x.inT || x.outT || x.note) nest(att, '__time', p.staff.id)[d] = `${x.inT || '--:--'} ~ ${x.outT || '--:--'}${x.note ? ' · ' + x.note : ''}`;
             if (x.ot) nest(att, '__ot', p.staff.id)[d] = Math.round(x.ot * 100) / 100;
           });
         });
         if (yms.length === 1) state.ym = yms[0];
         state.mealSub = 'att';
-        save(); render(); toast(`출근 ${marked}건을 반영했습니다${notes ? ` (비고로 인정 ${notes}건)` : ''}`);
+        save(); render(); toast(`출근 ${marked}건을 새로 표시했습니다${notes ? ` (비고로 인정 ${notes}건)` : ''} · 출퇴근 시각 ${times}건 연결${marked ? '' : ' (이미 입력된 칸은 그대로 두고 시각·지각만 붙임)'}`);   // "0건 반영"만 나와 실패처럼 보이던 것
         // 아침에 어제·오늘 근태기록을 넣은 경우 → 바로 출퇴근보고 문구 (한 달치를 넣을 때는 열지 않음, [출퇴근보고 만들기]로 언제든)
         const last = dates[dates.length - 1];
         if (last && last >= repDateAdd(repToday(), -1) && last <= repToday()) setTimeout(() => repDialog(last), 0);
@@ -267,7 +275,7 @@ const ACT = {
   vendorOff: el => { const v = db.vendors.find(x => x.id === el.dataset.id); if (!confirm(`'${v.name || '(이름 없음)'}' 거래처를 목록에서 뺄까요?\n(지난달 기록은 남습니다)`)) return; v.active = false; const m = monthOf(db.cur, state.ym); delete m.rows[v.id]; save(); render(); },
   monthlyShToggle: () => { state.monthlySh = !state.monthlySh; render(); },
   monthlyView: el => { state.monthlyView = el.dataset.v; if (el.dataset.ym) state.ym = el.dataset.ym; render(); },   // 월결제: 월별 입력 ↔ 업체별 월 지출
-  monthlyYShift: el => { state.monthlyYEnd = ymAdd(state.monthlyYEnd || state.ym, +el.dataset.d); render(); },
+  monthlyYShift: el => { state.monthlyYEnd = ymAdd(state.monthlyYEnd || state.monthlyYShown || state.ym, +el.dataset.d); render(); },
   copyPrevMonthly: () => {
     const m = monthOf(db.cur, state.ym), p = (db.monthly[db.cur] || {})[ymAdd(state.ym, -1)];
     if (!p) { toast('전월 자료가 없습니다.'); return; }

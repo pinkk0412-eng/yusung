@@ -23,7 +23,7 @@ function settingsHtml() {
         ${f('회사명', 'company', '㈜유성')}
         ${f('실무책임자 (직책 / 이름)', 'manager')}
         ${f('확인자 (경영지원팀)', 'checker', '경영지원팀 담당자')}
-        ${f('전도금 입금 계좌', 'account', '㈜유성 우리은행 1005-202-000000')}
+        ${f('전도금 입금 계좌', 'account', '㈜유성 ○○은행 000-000-000000')}
       </div>
       <h3>기간 · 문서 번호</h3>
       <div class="form-grid">
@@ -40,7 +40,7 @@ function settingsHtml() {
       </div>
       <h3>결재라인</h3>
       <div class="form-grid">${s.approvers.map((a, i) => `<label>${i + 1}번 칸<span class="row"><input style="width:92px" value="${esc(a.title)}" data-ch="appr" data-i="${i}" data-f="title" data-fid="ap_t${i}"><input class="grow" value="${esc(a.name)}" placeholder="직책/이름" data-ch="appr" data-i="${i}" data-f="name" data-fid="ap_n${i}"></span></label>`).join('')}</div>
-      <div class="row" style="margin-top:8px"><button class="btn sm" data-act="apprAdd">+ 결재칸 추가</button>${s.approvers.length > 1 ? '<button class="btn sm" data-act="apprDel">− 마지막 칸 삭제</button>' : ''}</div>
+      <div class="row" style="margin-top:8px"><button class="btn sm" data-act="apprAdd">+ 결재칸 추가</button>${s.approvers.length > 1 ? '<button class="btn sm" data-act="apprDel">− 마지막 칸 삭제</button>' : ''}<span class="muted small">왼쪽 = 칸 제목(본부장·총괄·최종), 오른쪽 = 결재하는 사람 "직책/이름" · <b>이름을 비운 칸은 인쇄에서 빗금(결재 안 함)</b></span></div>
       <h3>실무책임자 서명 <span class="muted small">— 현장마다 따로, 현장 데이터 폴더에 저장 (다른 PC에서도 그대로)</span></h3>
       <div class="row">${signData() ? `<img src="${signData()}" alt="서명" style="height:46px;border:1px solid var(--line);background:#fff;padding:2px">` : '<span class="muted small">등록된 서명 없음</span>'}
         <button class="btn sm" data-act="signSet">서명 그림 올리기</button>${signData() ? '<button class="btn sm danger" data-act="signClear">서명 삭제</button>' : ''}

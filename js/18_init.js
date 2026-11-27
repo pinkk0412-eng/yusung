@@ -16,6 +16,7 @@ const CH = {
     else if (f === 'claimAmt') { const v = String(el.value).trim(); if (v === '') delete t.claimAmt; else t.claimAmt = toNum(v); }   // 청구 금액 (비우면 전액)
     else t[f] = el.value;
     if (f === 'cat' && t.cat) learn(t);
+    if (f === 'memo' && !t.cat && t.kind !== 'in') { const c = guessCat(t, db.merchantMap); if (c) t.cat = c; }   // "중식/…" 처럼 쳐도 세목 자동 (빠른 입력 버튼과 같게)
     if (f === 'kind' && t.kind === 'in') t.cat = '';
   },
   cardFilter: el => { state.cardFilter = el.value; },
@@ -60,7 +61,7 @@ const CH = {
   site: el => { const s = site(); s[el.dataset.f] = el.type === 'checkbox' ? el.checked : el.dataset.num ? toNum(el.value) : el.value; },
   feeDoc: el => { const s = site(); s.feeDoc = s.feeDoc || {}; s.feeDoc[el.dataset.f] = el.value; },   // 설정 › 분양대행수수료 청구공문 (12d)
   taxSet: el => { const t = db.settings.tax = db.settings.tax || {}; t[el.dataset.f] = el.type === 'checkbox' ? el.checked : el.value.trim() === '' ? '' : toNum(el.value); },   // 설정 › 원천세 (00 taxOpt)
-  appr: el => { site().approvers[+el.dataset.i][el.dataset.f] = el.value; },
+  appr: el => { site().approvers[+el.dataset.i][el.dataset.f] = el.dataset.f === 'name' ? el.value.trim().replace(/\s*\/\s*/g, '/') : el.value; },   // "상무 / 홍길동" → "상무/홍길동" (결재본처럼 붙여 써야 칸에 다 들어감)
   staff: el => { const p = db.staff.find(x => x.id === el.dataset.id); if (!p) return; p[el.dataset.f] = el.type === 'checkbox' ? el.checked : el.value.trim(); },
   payDoc: el => { const d = payDocsOf(state.ym); const c = d[el.dataset.co] = d[el.dataset.co] || {}; c[el.dataset.k] = el.checked; },
   staffDoc: el => { const p = db.staff.find(x => x.id === el.dataset.id); if (!p) return; p.docs = p.docs || {}; p.docs[el.dataset.k] = el.checked; },
@@ -71,7 +72,8 @@ const CH = {
     let v = el.value;
     if (['rate', 'otRate', 'mealRate', 'otHours', 'mealDays', 'incentive'].includes(f)) v = toNum(v);
     else if (f === 'workDays' || f === 'prorate') v = String(v).trim() === '' ? null : toNum(v);
-    if (f === 'rate' && toNum(rec.rate) && v && v !== toNum(rec.rate) && !rec.chg) { setTimeout(() => payRateAsk(p, v), 0); return; }   // 단가를 바꾸면 "언제부터 적용?" (11 payRateAsk) — 취소하면 그대로
+    const prevRec = ((db.payroll[db.cur] || {})[ymAdd(state.ym, -1)] || {})[p.id];   // 지난달에 그 단가로 지급한 적이 있을 때만 "언제부터?" — 처음 정하는 달(팀 단가 → 팀장만 다르게 등)은 바로 이 달 전체
+    if (f === 'rate' && toNum(rec.rate) && v && v !== toNum(rec.rate) && !rec.chg && prevRec && toNum(prevRec.rate)) { setTimeout(() => payRateAsk(p, v), 0); return; }   // 단가를 바꾸면 "언제부터 적용?" (11 payRateAsk) — 취소하면 그대로
     rec[f] = v;
     if (PAY_FIELDS.includes(f)) { p.pay = p.pay || {}; p.pay[f] = v; }
   },
@@ -213,6 +215,7 @@ async function init() {
     save(); scheduleRender();
   });
   view.addEventListener('keydown', ev => {
+    if (ev.key === 'Enter' && /^newStaff(Team)?$/.test(ev.target.id)) { ev.preventDefault(); setTimeout(() => { const b = view.querySelector('[data-act="addStaff"]'); if (b) b.click(); }, 0); return; }   // (한글 입력 중이면 글자가 확정된 뒤에)   // 설정 직원 추가: 엔터 = [추가]
     if (ev.key === 'Enter' && (ev.target.tagName === 'INPUT' || ev.target.matches('textarea.memo2')) && ev.target.closest('table')) {
       // 엔터: 아래 행 같은 칸으로 이동
       const td = ev.target.closest('td'), tr = td.parentElement, idx = [...tr.children].indexOf(td);
@@ -220,10 +223,19 @@ async function init() {
       const inp = next && next.querySelector('input,select,textarea');
       ev.target.dispatchEvent(new Event('change', { bubbles: true }));
       if (inp) setTimeout(() => { const f = inp.dataset.fid; const el = f ? view.querySelector(`[data-fid="${CSS.escape(f)}"]`) : null; (el || inp).focus(); }, 10);
+      else if (ev.target.dataset.f === 'amount') {   // 전도금 마지막 줄 금액에서 엔터 → 새 지출 줄 (마우스로 [+ 지출] 다시 누르지 않게)
+        const t = db.tx.find(x => x.id === ev.target.dataset.id);
+        if (t && t.src === 'cash' && t.kind === 'out' && t.amount) setTimeout(() => ACT.addTx({ dataset: { src: 'cash', kind: 'out' } }), 30);
+      }
       ev.preventDefault();
     }
   });
-  $('#tabs').addEventListener('click', ev => { const b = ev.target.closest('button'); if (!b) return; if (hiddenTab(b.dataset.tab)) { secUnlockDialog(b.dataset.tab); return; } state.tab = b.dataset.tab; state.lockedTab = ''; render(); window.scrollTo(0, 0); });
+  $('#tabs').addEventListener('click', ev => { const b = ev.target.closest('button'); if (!b) return; if (hiddenTab(b.dataset.tab)) { secUnlockDialog(b.dataset.tab); return; } dropBlankTx(); state.tab = b.dataset.tab; state.lockedTab = ''; render(); window.scrollTo(0, 0); });
+  // 설명 글 숨기기 — 익숙해지면 사용법 글을 꺼서 화면을 짧게 (이 PC 브라우저에만 기억, 13 인쇄와 무관)
+  const hintSet = on => { document.body.classList.toggle('nohint', on); $('#hintTopBtn').textContent = on ? '설명 글 보이기' : '설명 글 숨기기'; try { localStorage.setItem('ys-nohint', on ? '1' : ''); } catch (e) { } };
+  let hintOff = false; try { hintOff = localStorage.getItem('ys-nohint') === '1'; } catch (e) { }
+  hintSet(hintOff);
+  $('#hintTopBtn').addEventListener('click', () => { hintSet(!document.body.classList.contains('nohint')); stickyHeads(); });
   $('#settingsTopBtn').addEventListener('click', () => { state.tab = 'settings'; render(); window.scrollTo(0, 0); });
   $('#siteSelect').addEventListener('change', ev => { db.cur = ev.target.value; save(); render(); });
   $('#monthInput').addEventListener('change', ev => { if (ev.target.value) { state.ym = ev.target.value; render(); } });
@@ -284,7 +296,7 @@ async function init() {
     const h = await Promise.race([idb.get('root'), new Promise(r => setTimeout(() => { slow = true; r(null); }, 6000))]);
     if (h) {
       state.savedRootName = h.name;
-      try { if (await h.queryPermission({ mode: 'readwrite' }) === 'granted') await openRoot(h); } catch (e) { }
+      try { if (await permQ(h) === 'granted') await openRoot(h); } catch (e) { }
     } else {   // 전에 폴더를 골랐는데 브라우저가 기억하지 못함 → 첫 화면에 이유 (05 gateView)
       let info = null; try { info = JSON.parse(localStorage.getItem(ROOT_LS) || 'null'); } catch (e) { }
       if (info && info.name) state.rootLost = { name: info.name, why: slow ? '브라우저 저장소가 6초 안에 답하지 않음' : info.err || '브라우저 저장소에 폴더 기록이 없음 (브라우저를 닫을 때 사이트 데이터를 지우는 설정이거나, 다른 주소·다른 브라우저로 연 경우)' };

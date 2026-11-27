@@ -58,10 +58,10 @@ function viewCash() {
 
   return `
     ${pageHead(`${ymLabel(ym)} 전도금 정산`, `${ym}-01 ~ ${ym}-${daysIn(ym)}`,
-    BTN('addTx', '+ 지출', 'data-src="cash" data-kind="out"', 'primary') + BTN('addTx', '+ 전도금 입금', 'data-src="cash" data-kind="in"') + BTN('ocrRc', '영수증 사진으로 입력', 'data-src="cash" title="영수증 사진을 올리면 날짜·가맹점·금액을 읽어 지출 내역을 만들어 줍니다"')
-    + BTN('importCash', '엑셀 불러오기', 'title="기존 전도금 장부(엑셀)를 옮겨 올 때"')
+    BTN('addTx', '+ 지출', 'data-src="cash" data-kind="out"', 'primary') + BTN('addTx', '+ 전도금 입금', 'data-src="cash" data-kind="in"')
     + MENU('인쇄', [MI('rcPrint', '증빙철 인쇄', 'data-src="cash"', '사진 영수증 + 사진 없는 내역의 붙임 칸'), MI('photoPrint', '입고사진 정리 (인쇄·PDF)', '', '날짜별 소모품·비품 사진')])
-    + MENU('저장', [MI('exportCash', '엑셀로 저장', '', '집행내역 · 청구서'), MI('photoPpt', '입고사진 PPT 파일', '', '파워포인트 (슬라이드마다 1건)')]))}
+    + MENU('저장', [MI('exportCash', '엑셀로 저장', '', '집행내역 · 청구서'), MI('photoPpt', '입고사진 PPT 파일', '', '파워포인트 (슬라이드마다 1건)')])
+    + MORE([MI('ocrRc', '영수증 사진으로 입력', 'data-src="cash"', '사진의 날짜·가맹점·금액을 읽어 지출 내역을 만듦'), MI('importCash', '엑셀 불러오기', '', '기존 전도금 장부(엑셀)를 옮겨 올 때')]))}
     ${dupBanner('cash')}
     <div class="stats">
       <div class="stat"><div class="k">전월 이월 잔액</div><div class="v">${fmt(cs.carry)}</div></div>

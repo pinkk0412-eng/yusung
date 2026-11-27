@@ -11,7 +11,7 @@
 
 const MB_APP_KEY = 'x9smy0u0ljcumr7';   // 드롭박스 앱 yusung-receipts (2026-11-13 등록) — 모든 현장이 같은 키
 const MB_URL = 'https://pinkk0412-eng.github.io/yusung/m/';
-const MB = { root: null, manual: false, want: false, ready: false, n: 0, scanning: false };
+const MB = { root: null, manual: false, want: false, ready: false, n: 0, scanning: false, saved: null, checked: false };
 const mbCfg = () => { const s = db.settings; if (!s.mb) s.mb = { appKey: '', token: '', links: [], url: '' }; if (!s.mb.links) s.mb.links = []; return s.mb; };
 const mbKey = () => MB_APP_KEY || mbCfg().appKey;
 const mbUrlBase = () => mbCfg().url || MB_URL;
@@ -20,11 +20,29 @@ const b64urlBytes = u => btoa(String.fromCharCode(...u)).replace(/\+/g, '-').rep
 const b64urlText = s => b64urlBytes(new TextEncoder().encode(s));
 
 /* ---------- 휴대폰 사진함 폴더 ---------- */
-async function mbInit() {   // 시작할 때: 직접 고른 폴더가 있으면 그것, 아니면 데이터 폴더를 연 뒤 자동으로 찾음 (01 openRoot → mbRefind)
-  const h = await Promise.race([idb.get('mbRoot'), new Promise(r => setTimeout(() => r(null), 2000))]).catch(() => null);
-  if (h) { MB.root = h; MB.manual = true; MB.want = true; try { MB.ready = (await h.queryPermission({ mode: 'readwrite' })) === 'granted'; } catch (e) { MB.ready = false; } }
+/* 시작할 때는 사진함을 찾지도·세지도·권한을 묻지도 않음 — [📱 휴대폰 영수증 확인]을 누를 때만 mbCheck (사용자 요청 11/25:
+   예전에 고른 사진함이 옮겨졌으면 크롬 권한 확인이 답을 안 해 시작이 멈췄음). 직접 고른 폴더 기록만 꺼내 둠 */
+async function mbInit() {
+  MB.saved = (await Promise.race([idb.get('mbRoot'), new Promise(r => setTimeout(() => r(null), 2000))]).catch(() => null)) || null;
   mbBtn();
-  // 자동 확인 없음 — 프로그램을 열 때 한 번 세고, 그 뒤엔 [📱 휴대폰 영수증 확인] 을 누를 때만 (사용자 요청 11/13)
+}
+async function mbCheck() {   // 버튼을 눌렀을 때: 사진함 찾기(직접 고른 폴더 → 권한 / 아니면 데이터 폴더 안 자동 찾기) → 받을 사진 있으면 받기 창
+  if (!FS.ready) { toast('먼저 데이터 폴더를 여세요.'); return; }
+  const h = MB.saved;
+  if (h && !MB.manual) {
+    let p = await permQ(h);
+    if (p === 'prompt') p = await Promise.race([h.requestPermission({ mode: 'readwrite' }).catch(() => 'hang'), new Promise(r => setTimeout(() => r('hang'), 30000))]);
+    if (p === 'hang') await mbForget();   // 옮겼거나 지운 폴더 (권한 확인이 답을 안 하거나 오류) → 자동 찾기로
+    else Object.assign(MB, { root: h, manual: true, want: true, ready: p === 'granted' });
+  }
+  MB.checked = true;
+  await mbScanCount();
+  if (MB.ready) return mbInbox();
+  toast(MB.manual ? '휴대폰 사진함 폴더 권한이 필요합니다.' : (MB.gone ? '예전에 고른 휴대폰 사진함 폴더가 없습니다 (옮겼거나 지움).' : '휴대폰 사진함을 찾지 못했습니다.') + ' [📱 휴대폰 사진함 고르기]로 드롭박스\\앱\\yusung-receipts 폴더를 한 번 골라 주세요.');
+}
+async function mbForget() {   // 직접 고른 사진함이 없어짐 → 기록을 지우고 자동 찾기로 (못 찾으면 버튼이 [사진함 고르기])
+  try { await idb.set('mbRoot', null); } catch (e) { }
+  Object.assign(MB, { root: null, saved: null, manual: false, want: false, ready: false, n: 0, gone: true });
 }
 async function mbAutoFind() {   // 데이터 폴더 안 Apps\* 또는 앱\* 중 connected.txt 가 있는 폴더
   if (!FS.ready || !FS.root) return null;
@@ -37,35 +55,45 @@ async function mbAutoFind() {   // 데이터 폴더 안 Apps\* 또는 앱\* 중 
   }
   return null;
 }
-function mbRefind() { if (!MB.manual) { MB.root = null; MB.ready = false; } mbScanCount(); }
+function mbRefind() { if (!MB.manual) { MB.root = null; MB.ready = false; MB.checked = false; MB.n = 0; } mbBtn(); }   // 데이터 폴더를 바꿈 → 다음에 버튼을 누를 때 다시 찾음 (세지 않음)
 /* 드롭박스는 연결했는데 사진함을 못 찾음 = 데이터 폴더가 드롭박스 맨 위 폴더가 아님 → 직접 한 번 골라야 함 (연결 직후 2분은 동기화 기다림) */
-const mbLost = () => !MB.ready && !MB.manual && FS.ready && !!mbCfg().token && Date.now() - (mbCfg().atMs || 0) > 2 * 60 * 1000;
+const mbLost = () => MB.checked && !MB.ready && !MB.manual && FS.ready && (MB.gone || !!mbCfg().token && Date.now() - (mbCfg().atMs || 0) > 2 * 60 * 1000);
+const mbIdle = () => !MB.checked && !MB.ready && !MB.manual && FS.ready && (!!MB.saved || !!mbCfg().token);   // 아직 안 눌러 봄
 function mbBtn() {   // 상단바: 사진함이 있으면 늘 보임 — 받을 사진이 있으면 파란 [📱 휴대폰 영수증 N장], 없으면 [📱 휴대폰 영수증 확인] (누르면 바로 확인) · 권한이 풀렸거나 못 찾으면 그 안내
   const st = $('#saveState'); if (!st) return;
   let b = $('#mbBtn');
-  if (!b) { b = document.createElement('button'); b.id = 'mbBtn'; b.type = 'button'; b.className = 'btn sm'; b.onclick = () => (MB.ready ? mbInbox() : MB.manual ? mbReopen() : mbPick()); st.before(b); }
-  const lost = mbLost();
-  b.style.display = MB.ready || (MB.manual && !MB.ready) || lost ? '' : 'none';
+  if (!b) { b = document.createElement('button'); b.id = 'mbBtn'; b.type = 'button'; b.className = 'btn sm'; b.onclick = () => (MB.ready ? mbInbox() : mbIdle() ? mbCheck() : MB.manual ? mbReopen() : mbPick()); st.before(b); }
+  const lost = mbLost(), idle = mbIdle();
+  b.style.display = MB.ready || idle || (MB.manual && !MB.ready) || lost ? '' : 'none';
   b.classList.toggle('primary', MB.ready && MB.n > 0);
-  b.textContent = MB.ready ? (MB.n > 0 ? `📱 휴대폰 영수증 ${MB.n}장` : '📱 휴대폰 영수증 확인') : lost ? '📱 휴대폰 사진함 고르기' : '📱 휴대폰 사진함 열기';
-  b.title = MB.ready ? (MB.n > 0 ? '직원들이 휴대폰 앱으로 보낸 영수증 받기' : '휴대폰 앱으로 새로 보낸 영수증이 있는지 지금 확인') : lost ? '사진함을 자동으로 찾지 못했습니다 — 드롭박스\\앱\\yusung-receipts 폴더를 한 번 골라 주세요' : '휴대폰 사진함 폴더 권한이 필요합니다';
+  b.textContent = MB.ready ? (MB.n > 0 ? `📱 휴대폰 영수증 ${MB.n}장` : '📱 휴대폰 영수증 확인') : idle ? '📱 휴대폰 영수증 확인' : lost ? '📱 휴대폰 사진함 고르기' : '📱 휴대폰 사진함 열기';
+  b.title = MB.ready ? (MB.n > 0 ? '직원들이 휴대폰 앱으로 보낸 영수증 받기' : '휴대폰 앱으로 새로 보낸 영수증이 있는지 지금 확인') : idle ? '휴대폰 앱으로 보낸 영수증이 있는지 지금 확인' : lost ? '사진함을 자동으로 찾지 못했습니다 — 드롭박스\\앱\\yusung-receipts 폴더를 한 번 골라 주세요' : '휴대폰 사진함 폴더 권한이 필요합니다';
 }
 async function mbPick() {   // 자동으로 못 찾을 때만 (드롭박스 폴더 밖에 데이터 폴더가 있는 경우 등)
   if (!window.showDirectoryPicker) { toast('이 브라우저는 폴더 선택을 지원하지 않습니다. 크롬 또는 엣지로 여세요.'); return; }
   let h; try { h = await showDirectoryPicker({ id: 'yusung-mobile', mode: 'readwrite' }); } catch (e) { return; }
   let ok = false; for (const n of ['inbox', 'connected.txt']) { try { await (n === 'inbox' ? h.getDirectoryHandle(n) : h.getFileHandle(n)); ok = true; } catch (e) { } }
   if (!ok && !confirm(`📁 ${h.name} 폴더에는 휴대폰 사진함 표시(connected.txt)가 없습니다.\n보통 드롭박스\\앱(Apps)\\yusung… 폴더입니다. 그래도 이 폴더를 사용할까요?`)) return;
-  await idb.set('mbRoot', h); Object.assign(MB, { root: h, manual: true, want: true, ready: true });
+  await idb.set('mbRoot', h); Object.assign(MB, { root: h, saved: h, manual: true, want: true, ready: true, checked: true, gone: false });
   await mbScanCount(); render(); toast(`휴대폰 사진함으로 📁 ${h.name} 폴더를 사용합니다.`);
 }
 async function mbReopen() {
   if (!MB.manual) return mbScanCount();
-  try { MB.ready = (await MB.root.requestPermission({ mode: 'readwrite' })) === 'granted'; } catch (e) { MB.ready = false; }
+  // 옮겼거나 지운 폴더면 크롬이 답을 안 하거나 오류 → 'hang' → 기록을 지우고 자동 찾기 (전에는 같은 폴더만 다시 물어 열리지 않았음)
+  let p = await permQ(MB.root);
+  if (p !== 'hang' && p !== 'granted') p = await Promise.race([MB.root.requestPermission({ mode: 'readwrite' }).catch(() => 'hang'), new Promise(r => setTimeout(() => r('hang'), 30000))]);
+  if (p === 'hang') {
+    await mbForget(); MB.checked = true; await mbScanCount();
+    toast(MB.ready ? '예전에 고른 사진함 폴더가 없어 데이터 폴더 안 사진함을 찾았습니다.' : '예전에 고른 휴대폰 사진함 폴더가 없습니다 (옮겼거나 지움). [📱 휴대폰 사진함 고르기]로 다시 골라 주세요.');
+    if (state.tab === 'settings') render();
+    return MB.ready ? mbInbox() : undefined;
+  }
+  MB.ready = p === 'granted';
   if (MB.ready) await mbScanCount(); else toast('휴대폰 사진함 폴더 권한이 필요합니다.');
   mbBtn(); if (state.tab === 'settings') render();
 }
 async function mbAuto() {   // 직접 고른 폴더 그만 쓰고 자동으로 찾기
-  await idb.set('mbRoot', null); Object.assign(MB, { root: null, manual: false, want: false, ready: false, n: 0 });
+  await idb.set('mbRoot', null); Object.assign(MB, { root: null, saved: null, manual: false, want: false, ready: false, n: 0, checked: true, gone: false });
   await mbScanCount(); render();
 }
 async function mbInboxDir() {
@@ -104,7 +132,7 @@ async function mbRemove(it) { for (const n of [it.img, it.json]) if (n) { try { 
 
 /* ---------- 받기 ---------- */
 async function mbInbox() {
-  if (!MB.ready) return mbReopen();
+  if (!MB.ready) return MB.checked ? mbReopen() : mbCheck();
   if (!FS.ready) { toast('먼저 데이터 폴더를 여세요.'); return; }
   let items; try { items = await mbScan(); } catch (e) { toast('휴대폰 사진함을 읽지 못했습니다: ' + e.message); return; }
   MB.n = items.length; mbBtn();
@@ -161,7 +189,7 @@ function mbRunGroups(groups) {   // 현장·결제별로 차례로 03 ocrReceipt
   const byFile = new Map(g.items.map(it => [it.file, it]));
   if (groups.length) toast(`${site().name}현장 ${g.kind === 'card' ? '법인카드' : '전도금'} 영수증부터 엽니다 (남은 묶음 ${groups.length}개).`);
   ocrReceipts(g.kind, g.items.map(it => it.file), {
-    hintOf: f => { const it = byFile.get(f); return it && { date: it.meta.date || '', amount: +it.meta.amount || 0, memo: it.meta.memo || '' }; },
+    hintOf: f => { const it = byFile.get(f); return it && { date: it.meta.date || '', amount: +it.meta.amount || 0, memo: it.meta.memo || '', cut: !!it.meta.cut }; },
     onSaved: async done => {
       for (const f of done) { const it = byFile.get(f); if (it) await mbRemove(it); }
       g.items.forEach(it => URL.revokeObjectURL(it.url));
@@ -272,6 +300,7 @@ function mbPanel() {
     : MB.manual ? '직접 고른 폴더 — 권한 필요 <button class="btn sm primary" data-act="mbReopen">권한 허용</button>'
     : mbLost() ? `<span class="bad">못 찾음</span></p><div class="banner warn small" style="margin:0 0 8px">데이터 폴더(📁 ${esc(FS.root ? FS.root.name : '')})가 드롭박스 맨 위 폴더가 아니라서 사진함을 자동으로 찾지 못했습니다.
         <b>드롭박스 → 앱 → yusung-receipts</b> 폴더를 한 번만 골라 주세요.<div class="row" style="margin-top:6px"><button class="btn sm primary" data-act="mbPick">사진함 폴더 고르기</button></div></div><p style="display:none">`
+    : !MB.checked ? '아직 확인 안 함 <button class="btn sm" data-act="mbCheck">지금 확인</button>'
     : '찾는 중… (드롭박스가 앱\\yusung… 폴더를 내려받으면 자동으로 찾습니다)';
   return `<div class="panel"><h3 style="margin-top:0">휴대폰 영수증 앱 <span class="muted small">— 직원이 휴대폰으로 찍은 영수증을 로그인 없이 바로 받기</span></h3>
       ${!linked ? `<div class="banner warn small" style="margin:0 0 8px"><b>처음 한 번</b>: [드롭박스 연결]을 누르고, 열린 창에서 이 PC 드롭박스 계정으로 <b>[허용]</b>만 누르면 됩니다.
@@ -299,6 +328,7 @@ const MB_ACT = {
   mbReopen: () => mbReopen(),
   mbAuto: () => mbAuto(),
   mbInbox: () => mbInbox(),
+  mbCheck: () => mbCheck(),
   mbCopy: el => mbCopy(el.dataset.v || ''),
   mbRenew: el => { const id = el.dataset.v || ''; if (!confirm('지금 링크를 막고 새 링크를 만들까요?\n예전 링크로 보낸 사진은 받을 때 "막은 링크"로 표시됩니다. 새 링크를 단톡방에 다시 올려 주세요.')) return; mbNewLink(id); mbCopy(id); },
   mbBlock: el => { const l = mbLinkOf(el.dataset.v || ''); if (!l || !confirm('이 링크를 막을까요? 이 링크로 오는 사진은 받지 않습니다.')) return; l.off = true; l.offAt = todayStr(); save(); render(); toast('링크를 막았습니다.'); },

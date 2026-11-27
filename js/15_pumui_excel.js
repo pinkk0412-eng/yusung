@@ -742,6 +742,7 @@ function pmEditor(item, warns = []) {
     const xa = [...r.querySelectorAll('[data-pxa]')];   // 지출결의서 적요 고쳐 쓴 것 (비우면 자동)
     if (xa.length) { it.expA = xa.map(el => el.value.trim()); if (!it.expA.some(Boolean)) delete it.expA; }
     readBlocks(r);
+    pmFillBody(it);   // 14 — 본문 빈 자리를 업체명·시행기간으로
   }
   const redraw = () => { root.querySelector('#pmBlocks').innerHTML = docHtml(); bind(); };
   const op = fn => () => { readBlocks(root); fn(); redraw(); };

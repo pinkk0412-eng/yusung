@@ -114,7 +114,8 @@ function caterAutoApply(ym) {
 /* 업체별 월 지출: 거래처 × 달 (12개월) 한 표. 칸에 바로 입력 (유성 부담 금액 · 시행사 금액이 있는 칸은 월별 입력에서) */
 const monthlyViewBtns = cur => `<div class="subtabs">${[['month', '월별 입력'], ['year', '업체별 월 지출']].map(([k, l]) => `<button class="${k === cur ? 'active' : ''}" data-act="monthlyView" data-v="${k}">${l}</button>`).join('')}</div>`;   // 보기 전환은 다른 탭과 같은 모양(검은 알약)으로 머리 아래에
 function viewMonthlyYear() {
-  const end = state.monthlyYEnd || state.ym, months = Array.from({ length: 12 }, (_, k) => ymAdd(end, k - 11));
+  const st0 = site().startYm || '', auto = st0 && state.ym <= ymAdd(st0, 11) ? ymAdd(st0, 11) : state.ym;   // 현장 시작 1년 안이면 시작월부터 (시작 전 빈 달이 앞에 줄줄이 보이지 않게)
+  const end = state.monthlyYShown = state.monthlyYEnd || auto, months = Array.from({ length: 12 }, (_, k) => ymAdd(end, k - 11));
   const M = db.monthly[db.cur] || {}, row = (v, ym) => ((M[ym] || {}).rows || {})[v.id] || {};
   const vs = db.vendors.filter(v => v.siteId === db.cur && (v.active !== false || months.some(ym => mTot(row(v, ym))))).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   let lastSubj = null;
@@ -169,7 +170,7 @@ function viewMonthly() {
         ${showSh ? `<td><input class="num" value="${fmt0(r.sh)}" data-ch="mrow" data-id="${v.id}" data-f="sh" data-fid="rs${v.id}" ${dis}></td>` : ''}
         <td class="num"><b>${fmt0(tot)}</b></td>
         <td class="num muted" style="white-space:nowrap;${diff ? 'color:var(--warn)' : ''}" ${diff ? 'title="전월과 금액이 다릅니다"' : ''}>${fmt0(ptot)}${ptot && !m.closed && tot !== ptot ? ` <button class="btn ghost sm" data-act="copyPrevOne" data-id="${v.id}" title="이 거래처만 전월 금액(${fmt(ptot)}) 불러오기">↙</button>` : ''}</td>
-        <td><input value="${esc(mPeriod(db.cur, ym, v.id))}" ${r.period ? '' : 'style="color:var(--muted)" title="전월 기간에서 한 달 넘겨 자동으로 채움 (고치면 이 달 값으로 저장)"'} data-rng="text" data-rng-fmt="yy" autocomplete="off" placeholder="'26.08.01~'26.08.31" data-ch="mrow" data-id="${v.id}" data-f="period" data-fid="rp${v.id}" ${dis}></td>
+        <td><input value="${esc(mPeriod(db.cur, ym, v.id))}" ${r.period ? '' : 'style="color:var(--muted)" title="전월 기간에서 한 달 넘겨 자동으로 채움 (고치면 이 달 값으로 저장)"'} data-rng="text" data-rng-fmt="yy" autocomplete="off" placeholder="'${ym.slice(2, 4)}.${ym.slice(5, 7)}.01~'${ym.slice(2, 4)}.${ym.slice(5, 7)}.${daysIn(ym)}" data-ch="mrow" data-id="${v.id}" data-f="period" data-fid="rp${v.id}" ${dis}></td>
         <td><input value="${esc(v.ref || '')}" data-ch="vendor" data-id="${v.id}" data-f="ref" data-fid="vr${v.id}" ${dis}></td>
         ${bgOn ? bgVendorCell(v, ym, dis) : ''}
         <td class="center"><input type="checkbox" title="부가세 포함 금액 (손익에는 ÷1.1 공급가로 반영)" ${v.vat !== false ? 'checked' : ''} data-ch="vendor" data-id="${v.id}" data-f="vat" ${dis}></td>
@@ -180,8 +181,9 @@ function viewMonthly() {
   return `
     <datalist id="subjList">${MONTHLY_SUBJECTS.map(s => `<option>${s}</option>`).join('')}</datalist>
     ${pageHead(`${ymLabel(ym)} 월결제 ${pmBadge('monthly', ym)}`, `마감 ${db.settings.monthlyClose}일 · 자금집행 ${mdw(payDate)}${payDate.getDate() !== db.settings.monthlyPay ? ` (${db.settings.monthlyPay}일이 휴일 → 다음 영업일)` : ''}`,
-    BTN('toggleClose', m.closed ? '마감 해제' : '마감하기', '', m.closed ? '' : 'primary') + BTN('vendorAdd', '+ 거래처', dis) + BTN('copyPrevMonthly', '전월 금액 복사', dis) + (t.sh ? '' : BTN('monthlyShToggle', showSh ? '시행사 칸 숨기기' : '+ 시행사 칸', 'title="시행사 청구가 있을 때 시행사 부담 금액을 넣는 칸"', 'ghost'))
-    + BTN('printMonthly', '자금청구서·지출결의서 인쇄') + BTN('exportMonthly', '엑셀로 저장', 'title="자금청구서 · 지출결의서 · 결제내역서 · 증빙 체크 시트"'))}
+    BTN('toggleClose', m.closed ? '마감 해제' : '마감하기', '', m.closed ? '' : 'primary') + BTN('copyPrevMonthly', '전월 금액 복사', dis)
+    + BTN('printMonthly', '자금청구서·지출결의서 인쇄') + BTN('exportMonthly', '엑셀로 저장', 'title="자금청구서 · 지출결의서 · 결제내역서 · 증빙 체크 시트"')
+    + MORE([MI('vendorAdd', '+ 거래처', dis, '새 월결제 거래처 (임차·통신·생수·캐터링 등)'), ...(t.sh ? [] : [MI('monthlyShToggle', showSh ? '시행사 칸 숨기기' : '+ 시행사 칸', '', '시행사 청구가 있을 때 시행사 부담 금액을 넣는 칸')])]))}
     ${monthlyViewBtns('month')}
     ${m.closed ? `<div class="banner ok">마감 완료 — ${mdw(payDate)} 정산 예정. 수정하려면 "마감 해제"를 누르세요.</div>`
       : `<div class="banner ${dd <= 3 ? 'warn' : 'info'}">마감까지 <b>${dd >= 0 ? `D-${dd}` : '기한 지남 · 아직 마감 안 됨'}</b> — 거래처별 청구 금액(VAT 포함)을 입력하고 마감하세요.</div>`}
@@ -194,7 +196,7 @@ function viewMonthly() {
     </div>
     ${bgIss.length ? `<div class="banner warn small">예산 확인 — <b>품의가 필요한 거래처 ${bgIss.length}곳</b>: ${bgIss.map(x => `${esc(x.v.name || '(이름 없음)')} (${esc(x.w.t)})`).join(' · ')} <button class="btn sm" data-act="goto" data-tab="budget">예산 탭</button></div>` : ''}
     <div class="tbl-wrap"><table class="t tight"><thead><tr><th>#</th><th>과목</th><th>업체명</th><th>거래내역</th><th>유성</th>${showSh ? '<th>시행사</th>' : ''}<th>합계</th><th>전월</th><th>사용기간/비고</th><th>참조문서</th>${bgOn ? '<th title="예산 항목 (품의로 지급하는 거래처는 비워 두고 참조문서에 품의 번호) · 예산 안에서 고른 업체는 구두보고 날짜">예산</th>' : ''}<th title="부가세 포함 여부 (손익 계산용)">VAT</th><th title="캐터링 연동">캐터링</th><th></th></tr></thead>
-    <tbody>${rows || `<tr><td colspan="${(showSh ? 13 : 12) + (bgOn ? 1 : 0)}" class="center muted" style="padding:30px">거래처가 없습니다. "+ 거래처 추가"로 임차료·통신비·생수·캐터링 등 매월 결제처를 등록하세요.</td></tr>`}
+    <tbody>${rows || `<tr><td colspan="${(showSh ? 13 : 12) + (bgOn ? 1 : 0)}" class="center muted" style="padding:30px">거래처가 없습니다. [+ 거래처]로 임차료·통신비·생수·캐터링 등 매월 결제처를 등록하세요.</td></tr>`}
     <tr class="sum"><td colspan="4">합계</td><td class="num">${fmt(t.ys)}</td>${showSh ? `<td class="num">${fmt(t.sh)}</td>` : ''}<td class="num">${fmt(t.total)}</td><td class="num muted">${fmt(pt.total)}</td><td colspan="${bgOn ? 6 : 5}"></td></tr></tbody></table></div>
     ${monthlyCheck(ym)}`;
 }

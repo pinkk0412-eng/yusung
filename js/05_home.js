@@ -163,7 +163,10 @@ function siteTasks(today, sid = db.cur) {
   const t0 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   return out.map(t => ({ ...t, dday: Math.round((t.due - t0) / 86400000) }));
 }
-const homeTasks = (today, sid = db.cur) => [...buildTasks(today, db.settings), ...siteTasks(today, sid)];
+const homeTasks = (today, sid = db.cur) => {   // 현장 시작월(설정) 전 달의 정산 일정은 빼기 — 11월에 연 현장에 "10월 정산"이 기한 지남으로 뜨던 것
+  const st = db.sites.find(x => x.id === sid) || {};
+  return [...buildTasks(today, db.settings).filter(t => !st.startYm || t.ym >= st.startYm), ...siteTasks(today, sid)];
+};
 function siteTaskBlockers(sid, ym, key) {
   if (key === 'orgClose1' || key === 'orgClose2') { const to = key === 'orgClose1' ? `${ym}-15` : `${ym}-${pad2(daysIn(ym))}`; return orgPmFor(to, sid).length ? [] : ['조직 지급 품의 미작성']; }
   if (key === 'billDoc') { const l = billAll(sid).filter(x => x.ym === ym); return !l.length ? ['이 달 청구 없음'] : l.some(x => !x.b.docDate) ? [`공문 미발송 ${l.filter(x => !x.b.docDate).length}건`] : []; }
@@ -174,7 +177,9 @@ function siteTaskBlockers(sid, ym, key) {
 function pmBadge(kind, ym) {   // 이 달 자금청구서가 품의 대장에 있는지
   const p = pmAll().find(x => x.kind === kind && x.linkYm === ym);
   if (!p) return `<span class="badge warn" title="자금청구서를 인쇄하면 품의 대장에 번호가 등록됩니다">${kind === 'cash' ? '청구 미등록' : '품의 미등록'}</span>`;
-  return `<a href="#" class="badge ${p.status === '결재완료' ? 'ok' : 'warn'}" data-act="goto" data-tab="${kind === 'cash' ? 'cash' : 'pumui'}" title="${kind === 'cash' ? '전도금 탭 아래 청구 대장' : '품의서 대장으로'}">${kind === 'cash' ? `청구 ${esc(p.no)}` : `품의 ${esc(p.no)}번`} · ${esc(p.status)}</a>`;
+  // 인쇄(등록)한 뒤에 금액이 바뀌었으면 알림 — 결재 올린 청구서와 지금 금액이 다르면 다시 인쇄해야 함
+  let chg = ''; try { const now = Math.round(toNum(pmLinkInfo(kind, ym)[0])), was = Math.round(toNum(p.amount)); if (was && now !== was) chg = ` <span class="badge bad" title="자금청구서를 인쇄한 뒤 금액이 바뀌었습니다. 다시 인쇄해서 결재를 받으세요 (같은 번호로 대장 금액도 고쳐짐).">인쇄 뒤 금액 바뀜: ${fmt(was)} → ${fmt(now)}</span>`; } catch (e) { }
+  return `<a href="#" class="badge ${p.status === '결재완료' ? 'ok' : 'warn'}" data-act="goto" data-tab="${kind === 'cash' ? 'cash' : 'pumui'}" title="${kind === 'cash' ? '전도금 탭 아래 청구 대장' : '품의서 대장으로'}">${kind === 'cash' ? `청구 ${esc(p.no)}` : `품의 ${esc(p.no)}번`} · ${esc(p.status)}</a>${chg}`;
 }
 function taskChecks(t) {   // 홈 일정 줄마다 실제 남은 일
   const chip = (txt, warn, tab, extra = '') => `<button class="chip ${warn ? 'warn' : 'ok'}" data-act="goto" data-tab="${tab}" data-ym="${t.ym}" ${extra}>${txt}</button>`;

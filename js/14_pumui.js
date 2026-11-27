@@ -155,6 +155,24 @@ function pmFromTpl(tp, over) {
   it.blocks = B;
   return it;
 }
+/* 본문의 빈 양식 자리(○○ 업체 섭외 · "나. 업체명 :" · "이용 기간 : 0000.00.00.")를 머리 칸의 업체명·시행기간으로 채움
+   — 위에서 적은 것을 본문에 또 치지 않게 (15 pmEditor 저장 때). 이미 고쳐 쓴 줄은 건드리지 않음 */
+function pmFillBody(it) {
+  const v = String(it.vendor || '').trim(), m = String(it.period || '').match(/(\d{4})\s*[.\-/]\s*(\d{1,2})\s*[.\-/]\s*(\d{1,2})/);
+  const d0 = m ? `${m[1]}.${pad2(+m[2])}.${pad2(+m[3])}.` : '';
+  // 첫 줄 "○○ 업체 섭외에 관하여" → 결재본처럼 제목의 핵심 ("복합기 추가 임차의 건" → "복합기 추가 임차에 관하여") · 제목이 아직 양식 그대로면 업체명
+  const S = site(), core = String(it.title || '').trim().replace(/\s*의\s*건\s*$/, '').replace(new RegExp(`^(${[S.name, S.fullName].filter(Boolean).map(x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\s*현장\\s*`), '').trim();
+  const lead = core && !core.includes('○○') ? core : v ? `${v} 업체 섭외` : '';
+  (it.blocks || []).forEach(b => {
+    if (b.type !== 'text' || !b.text) return;
+    b.text = b.text.split('\n').map(l => {
+      if (v && /^\s*나\.\s*업체명\s*:\s*$/.test(l)) return l.replace(/:\s*$/, `: ${v}`);
+      if (lead && l.includes('○○ 업체 섭외')) return l.replace('○○ 업체 섭외', lead);
+      if (d0 && /^\s*다\.\s*이용 기간\s*:\s*0000\.00\.00\./.test(l)) return l.replace('0000.00.00.', d0);
+      return l;
+    }).join('\n');
+  });
+}
 // 새 품의서: 1) 양식 고르기 → 2) 머리 칸 입력 → 엑셀 파일 또는 프로그램에서 작성
 function pmNewDialog() {
   const shown = PM_TPL.filter(t => !t.hidden), groups = [...new Set(shown.map(t => t.group))];
@@ -485,7 +503,7 @@ function viewPumui() {
   // 이번 달 정기 자금청구서 (지난달 인건비 · 이번 달 월결제) — 전도금 정산은 전도금 탭에서만 안내
   const T = todayStr().slice(0, 7), P = ymAdd(T, -1);
   const due = [['pay', P, `${monthNo(P)}월분 인건비 청구`, 'pay'], ['monthly', T, `${monthNo(T)}월 월결제`, 'monthly']]
-    .filter(([k, ym]) => !whole.some(p => p.kind === k && p.linkYm === ym));
+    .filter(([k, ym]) => ym >= (site().startYm || '') && !whole.some(p => p.kind === k && p.linkYm === ym));   // 현장 시작월 전 달은 빼기
   return `${pageHead('품의서 대장', `${esc(s.fullName || s.name)} · 다음 번호 ${pmNextNo()}`,
     BTN('pmAdd', '+ 새 품의서', 'title="양식(채용·업체 섭외·사무집기·영업팀 단가·오픈기간 카드 …)을 골라 엑셀 또는 프로그램에서 작성"', 'primary') + BTN('pmSync', '엑셀·스캔본 다시 읽기', 'title="현장 폴더/A. 기안품의 (C. 작성완료·A. 결재완료·B. 스캔본)의 엑셀·스캔본을 읽어 대장에 반영"'))}
       ${due.length ? `<div class="banner info small">이번 달 정기 청구: ${due.map(([, ym, l, tab]) => `<button class="chip" data-act="goto" data-tab="${tab}" data-ym="${ym}">${l} →</button>`).join(' ')}</div>` : ''}
