@@ -141,7 +141,7 @@ async function init() {
   // 새로고침 뒤 "이어서 열기" 화면: 아무 곳이나 누르거나 키를 누르면 전에 연 폴더 권한을 다시 받음 (브라우저 규칙상 사용자가 한 번은 눌러야 함)
   let reopening = false;
   const gateReopen = ev => {
-    if (reopening || FS.ready || !state.savedRootName || state.bgSolo || !document.body.classList.contains('data-gate')) return;
+    if (reopening || FS.ready || !state.savedRootName || state.bgSolo || state.gateFull || !document.body.classList.contains('data-gate')) return;
     if (ev.target.closest && ev.target.closest('[data-act], input, select, textarea, .modal-bg, a')) return;
     reopening = true; reopenRoot().finally(() => { reopening = false; });
   };
@@ -233,9 +233,14 @@ async function init() {
   // 사용법 안내 글: 기본은 접어 둠, 제목 옆 [사용법] 으로 펴기 (04 pageHelpBtns · 이 PC 브라우저에만 기억 'ys-hint' = '1' 펼침)
   let hintOn = false; try { hintOn = localStorage.getItem('ys-hint') === '1'; } catch (e) { }
   document.body.classList.toggle('nohint', !hintOn);
-  const goHome = () => {   // 왼쪽 위 제목 = 업무 홈 (예산안만 작성 중이면 처음 화면으로)
-    if (FS.ready) { closeModal(); dropBlankTx(); state.tab = 'home'; state.lockedTab = ''; render(); window.scrollTo(0, 0); }
-    else if (state.bgSolo) ACT.bgSoloExit();
+  const goHome = async () => {   // 왼쪽 위 제목 = 맨 처음 화면 (데이터 폴더 고르기 · 체험 · 예산안만 작성) — 05 gateView, state.gateFull
+    if (state.demo) { if (confirm('체험을 끝내고 처음 화면으로 갈까요? 체험 중 고친 내용은 모두 사라집니다.')) { state.demo = false; location.reload(); } return; }
+    if (state.bgSolo) { ACT.bgSoloExit(); return; }
+    if (!FS.ready) return;
+    closeModal(); dropBlankTx(); clearTimeout(saveTimer); await flush();
+    for (let i = 0; i < 100 && (flushing || FS.dirty); i++) { await new Promise(r => setTimeout(r, 100)); if (!flushing && FS.dirty) await flush(); }   // 저장 중이던 것까지 끝내고
+    if ((FS.failed || FS.dirty) && !confirm('아직 폴더에 저장하지 못한 변경이 있습니다. 그래도 처음 화면으로 갈까요?\n(처음 화면에서 같은 폴더를 다시 열면 폴더에 저장된 내용으로 열립니다)')) return;
+    FS.ready = false; state.gateFull = true; render(); window.scrollTo(0, 0);
   };
   $('#brandHome').addEventListener('click', goHome);
   $('#brandHome').addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); goHome(); } });

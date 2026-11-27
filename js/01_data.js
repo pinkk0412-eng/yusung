@@ -542,7 +542,7 @@ async function openRoot(handle) {
   }
   normalizeDb();
   await secAuto();
-  FS.ready = true; undoReset();
+  FS.ready = true; state.gateFull = false; undoReset();   // gateFull = 제목을 눌러 돌아온 처음 화면 (18 goHome)
   if (FS.legacy.length) await migrateLayout();
   await flush();
   if (migrated && !FS.failed) { try { localStorage.removeItem(STORE_KEY); } catch (e) { } toast('예전 자료를 폴더로 옮겼습니다.'); }
