@@ -233,6 +233,12 @@ async function init() {
   // 사용법 안내 글: 기본은 접어 둠, 제목 옆 [사용법] 으로 펴기 (04 pageHelpBtns · 이 PC 브라우저에만 기억 'ys-hint' = '1' 펼침)
   let hintOn = false; try { hintOn = localStorage.getItem('ys-hint') === '1'; } catch (e) { }
   document.body.classList.toggle('nohint', !hintOn);
+  const goHome = () => {   // 왼쪽 위 제목 = 업무 홈 (예산안만 작성 중이면 처음 화면으로)
+    if (FS.ready) { closeModal(); dropBlankTx(); state.tab = 'home'; state.lockedTab = ''; render(); window.scrollTo(0, 0); }
+    else if (state.bgSolo) ACT.bgSoloExit();
+  };
+  $('#brandHome').addEventListener('click', goHome);
+  $('#brandHome').addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); goHome(); } });
   $('#navAdmin').addEventListener('click', () => secUnlockDialog());   // 경리 모드: 숨긴 관리자 메뉴 열기 (05 renderTop)
   $('#siteSelect').addEventListener('change', ev => { db.cur = ev.target.value; save(); render(); });
   $('#monthInput').addEventListener('change', ev => { if (ev.target.value) { state.ym = ev.target.value; render(); } });
