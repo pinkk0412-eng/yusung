@@ -171,9 +171,9 @@ function viewPay() {
   return `
     ${pageHead(`${ymLabel(ym)} 인건비 ${pmBadge('pay', ym)}`, `${ym}-01 ~ ${ym}-${daysIn(ym)} · ${(() => { const d = payFundDay(ymAdd(ym, 1), db.settings); return `${mdw(d)} 자금집행${d.getDate() !== db.settings.payrollDay ? ` (${db.settings.payrollDay}일이 휴일 → 전 영업일)` : ''}`; })()}`,
     BTN('printPay', `${payLocked() ? '🔒 ' : ''}자금청구서·지출결의서 인쇄`, payLocked() ? 'title="관리자 모드에서만"' : '', payLocked() ? 'lockbtn' : 'primary') + BTN('exportPay', `${payLocked() ? '🔒 ' : ''}엑셀로 저장`, payLocked() ? 'title="관리자 모드에서만"' : '', payLocked() ? 'lockbtn' : '')
-    + MORE([MI('payMealFill', '식대일수 채우기', '', '식대일수가 빈 사람 = 근무일수'), MI('payMealRate', '식대 단가 적용', '', '출근부에 적은 구분별 식대 단가를 이 달 인원에게'), MI('goto', '출근부 입력 →', 'data-tab="meal"', '출근부 탭으로')]))}
+    + MORE([MI('payMealFill', '식대일수 채우기', '', '식대일수가 빈 사람 = 근무일수'), MI('payMealRate', '식대 단가 적용', '', '출근부에 적은 구분별 식대 단가를 이 달 인원에게'), MI('goto', '출근부 입력 →', 'data-tab="meal" data-msub="att"', '출근·식대 탭으로')]))}
     ${!isAdmin() ? `<div class="banner warn small">🔒 경리 모드 — 비공개 급여 인원 ${db.staff.filter(x => x.siteId === db.cur && x.active !== false && isSecretStaff(x)).length}명(유성 정직원${secOpt().teams ? '·' + esc(secOpt().teams) : ''})은 표·합계에서 빠져 있습니다.${payLocked() ? ' 인건비 자금청구서·세부내역 인쇄와 엑셀 저장은 관리자 모드에서 하세요.' : ''}</div>` : ''}
-    <div class="banner info small">회색 = 출근부 자동 (입력하면 우선) · 식대: 지급 + / 캐터링 공제 − · 월급 중도 입·퇴사는 일할일수에 재직일수 · 같은 구분(상담사·TM 등)은 단가가 같으면 <button class="lnk" data-act="goto" data-tab="meal" data-msub="set">출근부 ⚙ 설정</button>에서 구분마다 한 번에</div>
+    <div class="banner info small">회색 = 출근부 자동 (입력하면 우선) · 식대: 지급 + / 캐터링 공제 − · 월급 중도 입·퇴사는 일할일수에 재직일수 · 같은 구분(상담사·TM 등)은 단가가 같으면 <button class="lnk" data-act="goto" data-tab="meal" data-msub="set">출근·식대 ⚙ 단가 설정</button>에서 구분마다 한 번에</div>
     ${rows.some(r => r.rec.taxType === 'daily' || r.c.small) ? `<div class="banner warn small">원천세: ${rows.some(r => r.rec.taxType === 'daily') ? `일용근로소득 = 하루 (일급 + 연장 − ${fmt(taxOpt(db.settings.tax).dDed)}원) × ${taxOpt(db.settings.tax).dRate}% × (1 − ${taxOpt(db.settings.tax).dCredit}%), 식대 제외 · ` : ''}소득세 1,000원 미만은 소액부징수(회색 0) — <b>세무 확인 필요</b> (설정 › 원천세에서 바꿈)</div>` : ''}
     <div class="stats">
       <div class="stat"><div class="k">총급여 (세전)</div><div class="v">${fmt(T('gross'))}</div></div>

@@ -16,6 +16,11 @@ const ACT = {
   setSub: el => { state.setSub = el.dataset.v; render(); window.scrollTo(0, 0); },
   secSetup: () => secSetupDialog(false), secChange: () => secSetupDialog(true), secUnlock: () => secUnlockDialog(), secLock: () => secLock(), secOff: () => secDisable(),
   photoPpt: () => photoPpt(),
+  demoStart: () => demoStart(),   // 01b 체험 모드 (첫 화면)
+  demoEnd: () => { if (confirm('체험을 끝내고 첫 화면으로 돌아갈까요? 체험 중 고친 내용은 모두 사라집니다.')) { state.demo = false; location.reload(); } },
+  rowMenu: el => { const r = el.getBoundingClientRect(); el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left, clientY: r.bottom })); },   // 줄 끝 [⋯] (04 ROW_MORE) → 18 오른쪽 클릭 메뉴
+  helpOpen: el => { const id = el.dataset.v; state.tab = 'help'; render(); window.scrollTo(0, 0); setTimeout(() => { const t = document.getElementById('help_' + id); if (t) t.scrollIntoView({ block: 'start' }); }, 0); },   // 화면 제목 옆 [? 설명서] (04 pageHelpBtns)
+  hintToggle: () => { const on = document.body.classList.contains('nohint'); document.body.classList.toggle('nohint', !on); try { localStorage.setItem('ys-hint', on ? '1' : ''); } catch (e) { } render(); },   // 제목 옆 [사용법]: 안내 글 펴기·접기
   helpGo: el => { const t = document.getElementById('help_' + el.dataset.v); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); },   // 10b 사용설명서 목차
   helpTab: el => { state.tab = el.dataset.tab; render(); window.scrollTo(0, 0); },
   helpPrint: () => { document.body.classList.add('help-print'); window.addEventListener('afterprint', () => document.body.classList.remove('help-print'), { once: true }); window.print(); },
@@ -87,7 +92,7 @@ const ACT = {
   exportCash: () => exportCash(),
   cashClaimOpen: () => cashClaimDialog(),   // 07 전도금 신청 창 (금액 입력 · 인쇄 · 마감)
   mealSub: el => { state.mealSub = el.dataset.v; render(); },
-  caterSub: el => { state.caterSub = el.dataset.v; render(); },   // 식대·캐터링 탭: 식대내역 / 캐터링
+  caterSub: el => { state.mealSub = el.dataset.v === 'cater' ? 'cater' : 'meal'; render(); },   // 예전 식대·캐터링 탭 버튼 (지금은 출근·식대 mealSub)
   mealGroup: el => { state.mealGroup = el.dataset.v; render(); },
   attPhotoPrint: () => printAttPhotos(),
   // 출근부 칸 클릭: 1 → 휴무 → 빈칸 만 (사진대체·체크누락·지각·0.5·직접 입력·지각 인정은 오른쪽 클릭 메뉴 08 attMenu)
@@ -216,7 +221,7 @@ const ACT = {
   },
   payMealRate: () => {
     const rules = mealRules();
-    if (!rules.length) { toast('출근부 → ⚙ 설정에서 식대 단가를 먼저 입력하세요.'); return; }
+    if (!rules.length) { toast('출근·식대 → ⚙ 단가 설정에서 식대 단가를 먼저 입력하세요.'); return; }
     const rows = payRows(db.cur, state.ym, true).filter(r => r.s.kind !== '정직원' && mealRateFor(r.s.team, rules) !== null && toNum(r.rec.mealRate) !== mealRateFor(r.s.team, rules));
     if (!rows.length) { toast('바꿀 사람이 없습니다 (이미 설정 단가와 같음).'); return; }
     if (!confirm(`${ymLabel(state.ym)} ${rows.length}명의 식대 단가를 설정값으로 바꿉니다.\n${rows.slice(0, 8).map(r => `${r.s.team || ''} ${r.s.name}: ${fmt(r.rec.mealRate)} → ${fmt(mealRateFor(r.s.team, rules))}`).join('\n')}${rows.length > 8 ? `\n외 ${rows.length - 8}명` : ''}\n(캐터링 공제 −10,000 처럼 직접 넣은 값도 바뀝니다)`)) return;

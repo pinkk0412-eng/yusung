@@ -195,36 +195,35 @@ function mealData(ym) {
   return { staff, per, cnt, unmatched, unknown, parsed, list };
 }
 // 직원 두 칸 [현장 인건비 직원] [유성 정직원] — 그 사람들만 출근부·식대내역·요약 (두 탭 공통 state.mealGroup)
-// 탭: 출근부(meal = 출근부·인건비 반영 요약·설정) / 식대·캐터링(cater = 식대내역·캐터링, state.caterSub)
+// 탭: 출근·식대(meal) 하나 — state.mealSub = att | meal | cater | sum | set
 const MEAL_TOP = [['현장', '현장 인건비 직원', '기획계약직·업체·알바 — 현장 인건비 청구'], ['정직원', '유성 정직원', '본사 지급 — 출근부·식대만 반영']];
 const MEAL_GROUPS = [['정직원', '유성 정직원', '본사 지급 · 출근부/식대만 반영'], ['현장', '현장 인건비', '기획계약직 · 업체 · 알바 등']];
 function staffGroup(s) { return s.kind === '정직원' ? '정직원' : s.kind === '외부' ? '외부' : '현장'; }
 function mealTop() {
-  if (state.mealSub === 'cater') state.mealSub = 'att';   // 예전 화면 주소 (캐터링은 이제 식대·캐터링 탭)
   return MEAL_TOP.some(x => x[0] === state.mealGroup) ? state.mealGroup : '현장';
 }
 const groupStaff = (g, all) => (all ? siteStaff(true) : workStaff()).filter(s => staffGroup(s) === g);
 const mealGroupSeg = g => `<div class="seg">${MEAL_TOP.map(([k, l, d]) => `<button class="seg-b ${k === g ? 'active' : ''}" data-act="mealGroup" data-v="${k}"><b>${l} <span class="seg-n">${groupStaff(k).length}명</span></b><small>${d}</small></button>`).join('')}</div>`;
 const subTabs = (list, cur, act) => `<div class="subtabs">${list.map(([k, l]) => `<button class="${k === cur ? 'active' : ''}" data-act="${act}" data-v="${k}">${l}</button>`).join('')}</div>`;
-function viewMeal() {   // 출근부 탭
+/* 출근·식대 탭 (11/27 출근부 + 식대·캐터링 합침): 직원 칸·요약은 한 번만, 아래 보기 = 출근부 · 식대내역 · 캐터링 · 인건비 반영 요약 · ⚙ 단가 설정
+   예전 'cater' 탭 주소는 05 render 가 meal + mealSub(meal|cater) 로 바꿈 */
+function viewMeal() {
   const g = mealTop(), ym = state.ym;
-  const head = pageHead(`${ymLabel(ym)} 출근부`, '1일 ~ 말일 · 익월 초 정산 → 인건비 반영',
-    BTN('importAtt', '출근부·근태기록 불러오기', 'title="얼굴인식 근태기록 엑셀 또는 기존 출근부 엑셀"', 'primary') + BTN('repOpen', '출퇴근보고 만들기', 'title="출근부로 카톡 출퇴근보고 문구 만들기"') + BTN('exportMeal', '엑셀로 저장', 'title="출근부·식대내역·결제내역·캐터링·인건비 반영 요약"')
-    + MORE([MI('attPhotoPrint', `출근 사진 인쇄${attPhotoCount(ym) ? ` (${attPhotoCount(ym)}장)` : ''}`, '', '출근부 칸에 오른쪽 클릭으로 등록한 이 달 사진을 A4 한 장에 4장씩')]));
-  if (state.mealSub === 'meal') state.mealSub = 'att';   // 식대내역은 식대·캐터링 탭으로
-  const subs = [['att', '출근부'], ...(g === '정직원' ? [] : [['sum', '인건비 반영 요약']]), ['set', '⚙ 설정 (출근 기준·식대 단가)']];   // 유성 정직원은 요약 없음 (본사 지급)
+  const subs = [['att', '출근부'], ['meal', '식대내역'], ['cater', '캐터링'], ...(g === '정직원' ? [] : [['sum', '인건비 반영 요약']]), ['set', '⚙ 단가 설정 (출근 기준·식대·급여)']];   // 유성 정직원은 요약 없음 (본사 지급)
   const sub = subs.some(x => x[0] === state.mealSub) ? state.mealSub : 'att';
-  const body = { att: mealAtt, sum: mealSum, set: mealSet }[sub]();
-  return `${head}${mealGroupSeg(g)}${mealStats(g)}${subTabs(subs, sub, 'mealSub')}${body}`;
-}
-function viewCater() {   // 식대·캐터링 탭 — 식대내역(직원 칸별, 법인카드·전도금 식대 결제 → 1인분) · 캐터링(일자별 주문 수량·금액 → 월결제)
-  const ym = state.ym, sub = state.caterSub === 'cater' ? 'cater' : 'meal';
-  const head = pageHead(`${ymLabel(ym)} 식대 · 캐터링`, sub === 'cater' ? '일자별 주문 수량·금액 · 출근 인원은 출근부에서 자동 · 월결제 캐터링 업체에 반영' : '법인카드·전도금 식대 → 사람별·날짜별 · 출근 안 한 날 식대 확인',
-    sub === 'cater' ? BTN('exportCater', '엑셀로 저장', 'title="캐터링 주문대장 (회사 양식)"') : BTN('exportMeal', '엑셀로 저장', 'title="출근부·식대내역·결제내역·캐터링·인건비 반영 요약"'));
-  const tabs = subTabs([['meal', '식대내역'], ['cater', '캐터링']], sub, 'caterSub');
-  if (sub === 'cater') return head + tabs + mealCater();
-  const g = mealTop();
-  return `${head}${tabs}${mealGroupSeg(g)}${mealStats(g)}<div class="small muted" style="margin:-4px 0 8px">식대 단가는 <a href="#" data-act="goto" data-tab="meal" data-msub="set">출근부 → ⚙ 설정</a>에서</div>${mealMeal()}`;
+  const xl = BTN('exportMeal', '엑셀로 저장', 'title="출근부·식대내역·결제내역·캐터링·인건비 반영 요약"');
+  const [title, desc, btns] = {
+    att: ['출근부', '1일 ~ 말일 · 익월 초 정산 → 인건비 반영', BTN('importAtt', '출근부·근태기록 불러오기', 'title="얼굴인식 근태기록 엑셀 또는 기존 출근부 엑셀"', 'primary') + BTN('repOpen', '출퇴근보고 만들기', 'title="출근부로 카톡 출퇴근보고 문구 만들기"') + xl
+      + MORE([MI('attPhotoPrint', `출근 사진 인쇄${attPhotoCount(ym) ? ` (${attPhotoCount(ym)}장)` : ''}`, '', '출근부 칸에 오른쪽 클릭으로 등록한 이 달 사진을 A4 한 장에 4장씩')])],
+    meal: ['식대내역', '법인카드·전도금 식대 → 사람별·날짜별 · 출근 안 한 날 식대 확인', xl],
+    cater: ['캐터링', '일자별 주문 수량·금액 · 출근 인원은 출근부에서 자동 · 월결제 캐터링 업체에 반영', BTN('exportCater', '엑셀로 저장', 'title="캐터링 주문대장 (회사 양식)"')],
+    sum: ['인건비 반영 요약', '출근부·식대 → 이 달 인건비', xl],
+    set: ['단가 설정', '구분별 출근 기준 시각 · 식대 단가 · 급여 단가', ''],
+  }[sub];
+  const head = pageHead(`${ymLabel(ym)} 출근·식대 — ${title}`, desc, btns);
+  if (sub === 'cater') return `${head}${subTabs(subs, sub, 'mealSub')}${mealCater()}`;   // 캐터링 = 현장 전체 (직원 칸 없음)
+  const body = { att: mealAtt, meal: mealMeal, sum: mealSum, set: mealSet }[sub]();
+  return `${head}${subTabs(subs, sub, 'mealSub')}${mealGroupSeg(g)}${mealStats(g)}${body}`;
 }
 function mealStats(g) {   // 그 칸 사람들 요약
   const ym = state.ym, att = attOf(ym), md = mealData(ym), staff = groupStaff(g), all = groupStaff(g, true);

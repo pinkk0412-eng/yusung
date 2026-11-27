@@ -63,7 +63,7 @@ function isSecretStaff(x) {
   if (o.hq && x.kind === '정직원') return true;
   const t = normLabel(x.team); return !!t && String(o.teams || '').split(/[,，\s]+/).filter(Boolean).some(k => t.includes(normLabel(k)));
 }
-const hiddenTab = tab => !isAdmin() && (tab === 'budget' || (secOpt().tabs || []).includes(tab));   // 예산·손익(14c)은 경리 모드에서 늘 잠김
+const hiddenTab = tab => !isAdmin() && (tab === 'budget' || tab === 'pl' || (secOpt().tabs || []).includes(tab));   // 예산·현장 손익(14c)은 경리 모드에서 늘 잠김
 const payLocked = (sid = db.cur) => !isAdmin(sid) &&db.staff.some(x => x.siteId === sid && x.kind !== '정직원' && isSecretStaff(x));   // 비공개 급여가 청구에 들어가는 사람
 const b64 = u8 => { let t = ''; for (let i = 0; i < u8.length; i += 0x8000) t += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(t); };
 const unb64 = t => Uint8Array.from(atob(t), c => c.charCodeAt(0));
@@ -194,7 +194,7 @@ async function secDisable() {   // 이 현장만 잠금 끄기
 function secPanel() {
   const on = secOn(), adm = isAdmin(), o = secOpt();
   const hidN = db.staff.filter(x => x.siteId === db.cur && isSecretStaff(x)).length;
-  const tabs = [['pl', '현장 손익'], ['bill', '매출 청구'], ['pay', '인건비 (전체)']];
+  const tabs = [['bill', '매출 청구'], ['pay', '인건비 (전체)']];   // 예산·현장 손익은 늘 잠김 (hiddenTab)
   const edit = secOptEditable(), lockedOthers = db.sites.filter(x => !isAdmin(x.id)).map(x => x.name);
   const status = db.sites.length > 1 ? `<p class="small" style="margin:0 0 8px">현장별 잠금 (비밀번호는 현장마다 따로): ${db.sites.map(x => `<span class="badge ${!secOn(x.id) ? '' : SEC.keys[x.id] ? 'ok' : 'warn'}" style="margin-right:4px">${esc(x.name)} ${!secOn(x.id) ? '잠금 없음' : SEC.keys[x.id] ? '🔓' : '🔒'}</span>`).join('')}</p>` : '';
   return `<div class="panel"><h3 style="margin-top:0">관리자 잠금 <span class="muted small">— ${esc(site().name)}현장 · 경리·실무 직원이 같은 데이터 폴더를 쓸 때 현장 손익·급여 숨기기</span></h3>
@@ -211,7 +211,7 @@ function secPanel() {
           <label class="small" style="align-self:end"><input type="checkbox" data-ch="secOpt" data-f="pl" ${o.pl ? 'checked' : ''}> 현장 손익 자료 암호화 (수익·직접 입력 값)</label>
           <label class="small" style="align-self:end"><input type="checkbox" data-ch="secOpt" data-f="hq" ${o.hq ? 'checked' : ''}> 유성 정직원 급여 비공개</label>
           <label>급여 비공개 구분 (쉼표로 여러 개 — 구분 이름에 들어 있으면)<input value="${esc(o.teams || '')}" data-ch="secOpt" data-f="teams" data-fid="secTeams" placeholder="비우면 유성 정직원만"></label>
-          <label class="small" style="grid-column:span 2">경리 모드에서 잠글 탭 (메뉴에 🔒 표시):${tabs.map(([k, l]) => `<label style="display:inline;margin-right:12px"><input type="checkbox" data-ch="secTab" data-k="${k}" ${(o.tabs || []).includes(k) ? 'checked' : ''}> ${l}</label>`).join('')}</label>
+          <label class="small" style="grid-column:span 2">경리 모드에서 잠글 메뉴 (예산·현장 손익은 늘 잠김 · 잠긴 메뉴는 경리 모드 메뉴에서 숨김):${tabs.map(([k, l]) => `<label style="display:inline;margin-right:12px"><input type="checkbox" data-ch="secTab" data-k="${k}" ${(o.tabs || []).includes(k) ? 'checked' : ''}> ${l}</label>`).join('')}</label>
         </div></fieldset>
         <p class="small muted" style="margin-top:6px">이 현장 비공개 급여: <b>${hidN}명</b> (${esc(db.staff.filter(x => x.siteId === db.cur && isSecretStaff(x)).map(x => x.name).join(', ') || '없음')}) · 사람별로는 설정 → 직원·카드의 "급여 비공개" 칸으로 더 지정할 수 있습니다.
           경리 모드에서는 비공개 급여가 들어가는 인건비 자금청구서·세부내역 인쇄와 엑셀 저장을 관리자만 할 수 있습니다.</p>
@@ -260,6 +260,7 @@ async function rcReopen() {
 }
 async function rcPick() {
   if (!window.showDirectoryPicker) return;
+  if (state.demo) { toast('체험 모드에서는 영수증 보관 폴더를 고를 수 없습니다.'); return; }
   let h; try { h = await showDirectoryPicker({ id: 'yusung-receipts', mode: 'readwrite' }); } catch (e) { return; }
   if (FS.root && (await FS.root.isSameEntry(h) || await FS.root.resolve(h))) { toast('데이터 폴더(드롭박스)와 다른 곳을 고르세요. 예: 구글 드라이브 안에 "유성 영수증" 폴더'); return; }
   await idb.set('rcRoot', h); RC.root = h; RC.want = true; RC.ready = true;
@@ -377,7 +378,7 @@ function undoApply(redo) {
 // 지울 파일 대기열: { folder, rel, at } — 브라우저 저장소에도 적어 둬서 프로그램을 닫았다 열어도 나중에 지움
 const RM_Q = (() => { try { return JSON.parse(localStorage.getItem('yusung_rmq') || '[]') || []; } catch (e) { return []; } })();
 const RM_START = Date.now(), RM_WAIT = 30 * 60 * 1000;
-function rmQSave() { try { localStorage.setItem('yusung_rmq', JSON.stringify(RM_Q)); } catch (e) { } }
+function rmQSave() { if (state.demo) return; /* 01b 체험 모드: 메모리 폴더 파일이라 기억하지 않음 */ try { localStorage.setItem('yusung_rmq', JSON.stringify(RM_Q)); } catch (e) { } }
 async function rmQRun() {
   if (!FS.ready || !RM_Q.length) return;
   const now = Date.now(), all = undoStr(), hist = UNDO.stack.concat(UNDO.redo);
@@ -485,7 +486,7 @@ function normalizeDb() {
   if (gs && gs.check) { db.sites.forEach(x => { if (!(x.sec && x.sec.check)) x.sec = { salt: gs.salt, check: gs.check }; }); delete gs.salt; delete gs.check; }
   if (!db.sites.find(x => x.id === db.cur)) db.cur = db.sites[0].id;
   const seen = new Set();
-  db.sites.forEach(x => { if (x.folder && seen.has(x.folder)) x.folder = ''; if (x.folder) seen.add(x.folder); });
+  db.sites.forEach(x => { if (x.folder && seen.has(x.folder)) x.folder = ''; if (x.folder) seen.add(x.folder); x.name = siteShort(x.name); });
 }
 /* 예전 폴더 구조 → 본사 현장 폴더 구조 (파일 복사 → 자료 안의 파일 경로 바꾸기 → 예전 폴더 삭제) */
 function newRel(rel) {
@@ -535,7 +536,7 @@ async function openRoot(handle) {
   if (inner) { toast('현장 폴더 안쪽이 선택되었습니다. 현장 폴더들이 들어 있는 위 폴더(예: Dropbox)를 선택하세요.'); FS.root = null; render(); return; }
   await loadFolder();
   let migrated = false;
-  if (!db.sites.length) {
+  if (!db.sites.length && !state.demo) {   // 01b 체험 모드에서는 이 PC 예전 자료를 옮기지 않음
     let old = null; try { old = JSON.parse(localStorage.getItem(STORE_KEY)); } catch (e) { }
     if (old && old.sites && old.sites.length && confirm(`이 PC 브라우저에 예전에 입력한 자료(${old.sites.map(x => x.name).join(', ')})가 있습니다.\n선택한 폴더로 옮길까요?`)) { db = old; migrated = true; }
   }
@@ -559,6 +560,7 @@ async function rootRemember(h) {
 }
 async function pickRoot() {
   if (!window.showDirectoryPicker) { toast('이 브라우저는 폴더 저장을 지원하지 않습니다. 크롬 또는 엣지로 여세요.'); return; }
+  if (state.demo) { if (confirm('체험 모드를 끝내고 첫 화면에서 실제 데이터 폴더를 고를까요? 체험 중 고친 내용은 사라집니다.')) location.reload(); return; }   // 체험 자료가 실제 폴더로 넘어가지 않게
   try {
     const h = await showDirectoryPicker({ id: 'gyeongri-data', mode: 'readwrite' });
     const prev = FS.ready && FS.root ? { root: FS.root, db, keys: { ...SEC.keys } } : null;
@@ -577,7 +579,9 @@ async function pickRoot() {
  * 데이터 폴더(예: Dropbox) 바로 아래에 회사가 만든 "132. 수지 자이 에디시온" 같은 폴더를 골라 현장과 연결.
  * 프로그램은 폴더를 새로 만들지 않고, 연결한 폴더 안에 A. 기안품의 · B. 자금관련 … 구조로 저장. */
 const LINK_SRC = new Map();   // 현장 id → 자료를 복사해 올 예전 폴더 (다른 데이터 폴더에서 가져올 때)
-const siteTitleOf = folder => String(folder).replace(/^\s*\d+\s*[.)]\s*/, '').trim() || String(folder);
+/* 현장 약칭: 화면·파일 이름이 `${s.name}현장` 이라 끝의 "현장"은 뺌 ("테스트 현장" → "테스트", "새 현장"·"현장" 은 그대로) */
+const siteShort = v => { const t = String(v == null ? '' : v).trim(); if (t === '새 현장') return t; const s = t.replace(/\s*현장$/, '').trim(); return s || t; };
+const siteTitleOf = folder => siteShort(String(folder).replace(/^\s*\d+\s*[.)]\s*/, '').trim()) || String(folder);
 async function freeFolders() {
   const used = new Set(db.sites.map(x => x.folder).filter(Boolean)), out = [];
   for await (const [name, h] of FS.root.entries()) {

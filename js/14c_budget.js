@@ -136,14 +136,14 @@ function bgSyncPh(B) {
 const bgDot = d => d ? String(d).replace(/-/g, '.') : '';
 
 /* ---------- 화면: 예산 탭 ---------- */
-/* 예산·손익 탭 = [예산] 예산 작성 · 인력 일정 · 현장 정보 / [손익] 예산 대비 집행 · 현장 손익(12 viewPl) — 현장 손익은 관리자 잠금(secOpt tabs 'pl')이면 그 보기만 잠김 */
+/* 11/27 메뉴 둘로 나눔: [예산] 탭(budget) = 예산 작성 · 날짜별 일정 · 현장 정보 / [현장 손익] 탭(pl) = 현장 손익(12 viewPl) · 예산 대비 집행
+   보기: 예산 탭 = state.bgSub (edit·cal·info), 현장 손익 탭 = state.plSub (pl·exec) */
 const bgGrpOf = sub => sub === 'exec' || sub === 'pl' ? '손익' : '예산';
 function bgBar(B, solo) {
-  const sub = state.bgSub || 'edit', g = solo ? '예산' : bgGrpOf(sub);
-  const L = { 예산: [['edit', B && bgLocked(B) ? '예산 (결재본)' : '예산 작성'], ['cal', '날짜별 일정'], ['info', '현장 정보']], 손익: [['exec', '예산 대비 집행'], ['pl', `현장 손익${hiddenTab('pl') ? ' 🔒' : ''}`]] };
-  const top = solo ? '' : `<div class="subtabs bg-top">${['예산', '손익'].map(k => `<button class="${k === g ? 'active' : ''}" data-act="bgGrp" data-v="${k}">${k}</button>`).join('')}</div>`;
+  const g = !solo && state.tab === 'pl' ? '손익' : '예산', sub = g === '손익' ? (state.plSub === 'exec' ? 'exec' : 'pl') : (bgGrpOf(state.bgSub || 'edit') === '손익' ? 'edit' : state.bgSub || 'edit');
+  const L = { 예산: [['edit', B && bgLocked(B) ? '예산 (결재본)' : '예산 작성'], ['cal', '날짜별 일정'], ['info', '현장 정보']], 손익: [['pl', '현장 손익'], ['exec', '예산 대비 집행']] };
   const right = B && sub === 'cal' && g === '예산' ? bgCalStats(B) : '';   // 날짜별 일정: 단계별 합계를 탭 줄 오른쪽 빈자리에
-  return `${top}<div class="subtabs sub2">${L[g].map(([k, l]) => `<button class="${k === sub ? 'active' : ''}" data-act="bgSub" data-v="${k}">${l}</button>`).join('')}${right}</div>`;
+  return `<div class="subtabs">${L[g].map(([k, l]) => `<button class="${k === sub ? 'active' : ''}" data-act="bgSub" data-v="${k}">${l}</button>`).join('')}${right}</div>`;
 }
 function bgCalStats(B) {   // 날짜로 넣은 줄 합계 (한 줄 요약)
   const C = bgCalItems(B).filter(bgIsCal), lab = C.filter(bgIsLab), oth = C.filter(it => !bgIsLab(it)), P = B.phases;
@@ -151,9 +151,16 @@ function bgCalStats(B) {   // 날짜로 넣은 줄 합계 (한 줄 요약)
   return `<div class="bg-calstats">${P.map((p, i) => k(esc(p.name), fmt(sum(C, it => bgPhAmt(B, it)[i])))).join('')}<span class="bg-calsep"></span>${k('인건비', fmt(sum(lab, it => bgAmt(B, it))), '날짜로 넣은 인건비 줄')}${oth.length ? k(`다른 항목 ${oth.length}줄`, fmt(sum(oth, it => bgAmt(B, it)))) : ''}${k('연인원', `${fmtQty(sum(lab, it => bgPD(B, it))) || 0}명일`)}</div>`;
 }
 function viewBudget() {
-  const B = bgDoc(), sub = state.bgSub || 'edit';
-  if (sub === 'pl') return hiddenTab('pl') ? `${pageHead('현장 손익 🔒', esc(site().fullName || site().name))}${bgBar(B)}<div class="panel"><p>현장 손익은 관리자 잠금으로 숨겨져 있습니다.</p>${BTN('bgPlUnlock', '🔓 관리자 비밀번호로 열기', '', 'primary')}</div>` : viewPl(bgBar(B));
-  return B ? viewBudgetMain(B, sub) : viewBudgetNone();
+  const B = bgDoc();
+  if (bgGrpOf(state.bgSub || 'edit') === '손익') state.bgSub = 'edit';   // 예전 주소 (손익 보기는 이제 현장 손익 탭)
+  return B ? viewBudgetMain(B, state.bgSub || 'edit') : viewBudgetNone();
+}
+function viewPlTab() {   // [현장 손익] 탭: 현장 손익 · 예산 대비 집행
+  const B = bgDoc();
+  if (state.plSub !== 'exec') return viewPl(bgBar(B));
+  const head = pageHead(`${esc(site().name)}현장 예산 대비 집행 ${B ? bgStBadge(B) : ''}`, B ? `최초 예산 ${fmt(bgTotal(B))}원 (VAT 별도) · 전용·증액은 품의 결재 후 [반영]` : '예산이 없습니다',
+    !B ? '' : (bgLocked(B) ? BTN('bgMovePm', '전용·증액 품의 작성', '', 'primary') : '') + BTN('bgPrintExec', '인쇄') + BTN('bgExecXl', '엑셀로 저장'));
+  return `${head}${bgBar(B)}${B ? bgExecView(B) : `<div class="panel"><p>이 현장에는 아직 예산이 없습니다.</p><button class="btn primary" data-act="goto" data-tab="budget">예산으로 가기 →</button></div>`}`;
 }
 function viewBudgetNone() {
   return `${pageHead(`${esc(site().name)}현장 예산`, '현장 투입 전 예산심의(案) — 예산 단가·총액 안의 지출은 품의 없이 월결제로 (구두보고)',
@@ -167,11 +174,11 @@ function viewBudgetNone() {
 function viewBudgetMain(B, sub) {
   return `${pageHead(`${esc(site().name)}현장 예산 ${bgStBadge(B)}`, `${esc(B.title || '')}${B.author ? ` · 작성 ${esc(B.author)}` : ''}${B.date ? ` · ${bgDot(B.date)}` : ''} · 최초 예산 ${fmt(bgTotal(B))}원 (VAT 별도)`,
     (bgLocked(B) ? BTN('bgMovePm', '전용·증액 품의 작성', '', 'primary') : BTN('bgApprove', '결재완료로', 'title="결재가 끝나면 누르세요 — 예산이 잠기고 전용·증액 품의로만 바뀝니다"', 'primary'))
-    + MENU('인쇄', [MI('bgPrint', '예산심의(案) 인쇄', '', '갑지·세부내역·집계표'), MI('bgPrintExec', '예산 대비 집행 인쇄', '', '최초·전용·현재·집행')])
-    + MENU('저장', [MI('bgFileOut', '예산안 파일로 저장 (.xlsx)', '', '회사 양식 + 프로그램이 다시 읽는 원본'), MI('bgExecXl', '예산 대비 집행 엑셀')])
+    + BTN('bgPrint', '인쇄', 'title="예산심의(案) — 갑지·세부내역·집계표"')
+    + BTN('bgFileOut', '파일로 저장', 'title="예산안 파일 (.xlsx) — 회사 양식 + 프로그램이 다시 읽는 원본"')
     + MORE([MI('bgFileIn', '📥 예산안 파일 가져오기', bgLocked(B) ? 'disabled' : '', bgLocked(B) ? '결재된 예산은 바꿀 수 없습니다' : '본부장님이 보낸 예산안 파일(.xlsx)·예전 엑셀 예산안')]))}
     ${bgBar(B)}
-    ${sub === 'exec' ? bgExecView(B) : sub === 'cal' ? bgCalView(B) : sub === 'info' ? bgInfoView(B) : bgEditView(B)}`;
+    ${sub === 'cal' ? bgCalView(B) : sub === 'info' ? bgInfoView(B) : bgEditView(B)}`;
 }
 const bgStBadge = B => B.status === '결재완료' ? `<span class="badge ok" title="${B.approved && B.approved.date ? `결재 ${bgDot(B.approved.date)}` : ''}">결재완료 · 잠김</span>` : B.status === '결재전' ? '<span class="badge warn">결재 전</span>' : '<span class="badge">작성중</span>';
 
@@ -355,11 +362,7 @@ function bgCh(kind, el) {
 
 /* ---------- 버튼 (17 ACT 에 합침) ---------- */
 const BG_ACT = {
-  bgSub: el => { state.bgSub = el.dataset.v; render(); },
-  bgGrp: el => {   // [예산] [손익] — 묶음마다 마지막에 본 보기로
-    const last = state.bgLast = state.bgLast || {}; last[bgGrpOf(state.bgSub || 'edit')] = state.bgSub || 'edit';
-    state.bgSub = last[el.dataset.v] || (el.dataset.v === '손익' ? 'exec' : 'edit'); render();
-  },
+  bgSub: el => { const v = el.dataset.v; if (bgGrpOf(v) === '손익') { state.plSub = v; state.tab = 'pl'; } else state.bgSub = v; render(); },
   bgPlUnlock: () => secUnlockDialog('pl'),
   bgSched: el => bgSchedDialog(el.dataset.id),
   bgCalMore: () => { const B = bgDoc(); if (!B || bgLocked(B)) return; const D = bgCalRange(B); if (!D) return; B.calEnd = bgIso(Date.parse(D[D.length - 1]) + 30 * BG_DAY); bgTouch(); save(); render(); },

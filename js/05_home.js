@@ -9,8 +9,8 @@ const VIEW_SESSION_KEY = 'yusung_current_view';
 function saveCurrentView() {
   try {
     const route = { tab: state.tab, ym: state.ym };
-    if (state.tab === 'settings' && state.setSub) route.setSub = state.setSub;
-    if (state.tab === 'meal' || state.tab === 'cater') { route.mealSub = state.mealSub; if (state.mealGroup) route.mealGroup = state.mealGroup; if (state.caterSub) route.caterSub = state.caterSub; }
+    if ((state.tab === 'settings' || state.tab === 'appset') && state.setSub) route.setSub = state.setSub;
+    if (state.tab === 'meal') { route.mealSub = state.mealSub; if (state.mealGroup) route.mealGroup = state.mealGroup; }
     sessionStorage.setItem(VIEW_SESSION_KEY, JSON.stringify(route));
   } catch (e) { }
 }
@@ -23,7 +23,10 @@ function render() {
   document.body.classList.remove('data-gate');
   document.querySelector('#tabs').style.visibility = '';
   document.querySelectorAll('.topbar .field-inline').forEach(x => x.style.visibility = '');
-  if (state.tab === 'pl') { state.tab = 'budget'; state.bgSub = 'pl'; }   // 현장 손익은 14c 예산·손익 탭 안의 보기 (예전 링크·잠금 해제 후 이동)
+  if (state.tab === 'cater') { state.tab = 'meal'; state.mealSub = state.caterSub === 'cater' ? 'cater' : 'meal'; }   // 예전 식대·캐터링 탭 → 출근·식대 (08 viewMeal)
+  if (state.tab === 'settings' && state.setSub === 'close') { state.tab = 'close'; state.setSub = ''; }   // 예전 주소: 설정 › 현장 철수 → 현장 철수 메뉴
+  if (state.tab === 'settings' && SET_APP.includes(state.setSub)) state.tab = 'appset';   // 설정은 현장 설정 / 프로그램 설정 두 메뉴 (10 SET_SECS)
+  if (state.tab === 'appset' && !SET_APP.includes(state.setSub)) state.setSub = SET_APP[0];
   if (hiddenTab(state.tab)) {   // 관리자 잠금 탭(예산·손익 등) → 홈. 보던 탭 기록은 그대로 두고, 처음 한 번은 잠금 해제 창 (풀면 그 탭으로)
     const want = state.tab; state.lockedTab = want; state.tab = 'home';
     if (!state.lockAsked) { state.lockAsked = true; setTimeout(() => { if (!document.querySelector('.modal-bg')) secUnlockDialog(want); }, 0); }
@@ -32,10 +35,11 @@ function render() {
   renderTop();
   const fn = VIEWS[state.tab] || VIEWS.home;
   // 넓은 표의 가로 스크롤: 같은 화면을 다시 그릴 때는 그 자리 그대로, 화면이 바뀌면 처음 위치 (data-scroll-end 표는 오른쪽 끝 = 최근 달)
-  const vkey = [state.tab, db.cur, state.ym, state.mealGroup, state.mealSub, state.caterSub, state.monthlyView, state.monthlyYEnd, state.setSub, state.bgSub].join('|');
+  const vkey = [state.tab, db.cur, state.ym, state.mealGroup, state.mealSub, state.caterSub, state.monthlyView, state.monthlyYEnd, state.setSub, state.bgSub, state.plSub].join('|');
   const keepX = vkey === render.vkey ? [...view.querySelectorAll('.tbl-wrap')].map(w => [w.scrollLeft, w.scrollTop]) : null;   // 표 상자 안 위아래 위치도 그대로
   render.vkey = vkey;
-  view.innerHTML = conflictBanner() + fn();
+  view.innerHTML = demoBanner() + conflictBanner() + fn();   // 01b 체험 모드 안내
+  if (!view.querySelector('.hint, .phd-guide, .qb-h, .banner.info')) view.querySelectorAll('.phd-hint').forEach(b => { b.hidden = true; });   // 안내 글이 없는 화면은 [사용법] 안 보임
   frameWraps();   // 04 화면 나누기 (메뉴 / 표가 창 바닥까지)
   view.querySelectorAll('.tbl-wrap').forEach((w, i) => { if (keepX) { if (keepX[i]) { w.scrollLeft = keepX[i][0]; w.scrollTop = keepX[i][1]; } } else if (w.hasAttribute('data-scroll-end')) w.scrollLeft = w.scrollWidth; });
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === state.tab));
@@ -57,6 +61,8 @@ function gateView() {
   return `<div class="panel" style="max-width:760px;margin:30px auto">
       <h2>데이터 폴더 연결</h2>
       <p>이 프로그램은 자료를 <b>PC의 폴더에 파일로</b> 저장합니다. <b>회사가 만들어 둔 현장 폴더</b>를 골라 연결하면, 월별 자료와 영수증 사진이 그 폴더 안에 보관됩니다.</p>
+      ${gatePick(api, old)}
+      <details style="margin-top:14px"><summary class="small muted" style="cursor:pointer">폴더 구조 보기</summary>
       <pre class="small" style="background:#f7f8fa;border:1px solid var(--line);border-radius:6px;padding:10px;overflow-x:auto">📁 데이터 폴더 = 현장 폴더들이 들어 있는 폴더 (예: Dropbox)
  ├ 공통설정.txt
  ├ 📁 ○○○. ○○ 현장           (회사가 만든 현장 폴더 → 프로그램에서 연결)
@@ -66,17 +72,19 @@ function gateView() {
  │  │  ├ 📁 26년 08월 서류철     데이터.txt · 📁 영수증 · 📁 증빙(카드 명세서 PDF 등)
  │  │  └ 📁 A~F. … 스캔         법인카드 사용내역서(20만원 이상)·법인카드 정산·선결제·월결제·인건비·전도금 정산
  │  ├ 📁 C. 근무이행각서  📁 D. 기타(휴가계 등)
- └ 📁 다른 현장 …</pre>
-      ${api && state.rootLost ? `<div class="banner warn small">전에 <b>📁 ${esc(state.rootLost.name)}</b> 폴더를 열었는데 브라우저가 기억하지 못했습니다 — 이유: ${esc(state.rootLost.why)}<br>아래 [데이터 폴더 선택…]에서 같은 폴더를 다시 고르세요. 계속 이러면 이 화면을 캡처해서 보내 주세요.</div>` : ''}
+ └ 📁 다른 현장 …</pre></details>
+      <p class="muted small" style="margin:16px 0 0;padding-top:12px;border-top:1px solid var(--line-2)">폴더 없이 먼저 둘러보기: <button class="lnk" data-act="demoStart">🧪 체험해 보기</button> — 예시 현장 자료로 모든 화면을 볼 수 있습니다 (저장 안 됨 · 교육·인수인계용).</p>
+      <p class="muted small" style="margin:6px 0 0">본부장 등 폴더 없이 예산안만 쓸 때: <button class="lnk" data-act="bgSolo">📝 예산안만 작성</button> — 예산심의(案)를 파일(.xlsx)로 저장해 실무자에게 보내면, 실무자가 예산 탭에서 가져옵니다.</p>
+    </div>`;
+}
+/* 첫 화면: 데이터 폴더 고르기 버튼 (설명 그림보다 먼저 보이게) */
+function gatePick(api, old) {
+  return `${api && state.rootLost ? `<div class="banner warn small">전에 <b>📁 ${esc(state.rootLost.name)}</b> 폴더를 열었는데 브라우저가 기억하지 못했습니다 — 이유: ${esc(state.rootLost.why)}<br>아래 [데이터 폴더 선택…]에서 같은 폴더를 다시 고르세요. 계속 이러면 이 화면을 캡처해서 보내 주세요.</div>` : ''}
       ${api ? `<div class="row">${state.savedRootName ? `<button class="btn primary" data-act="fsReopen">📁 "${esc(state.savedRootName)}" 폴더 열기</button>` : ''}
         <button class="btn ${state.savedRootName ? '' : 'primary'}" data-act="fsPick">데이터 폴더 선택…</button></div>
         <p class="muted small">현장 폴더들이 들어 있는 폴더(예: <b>Dropbox</b>)를 고르세요. "파일 수정 허용"을 물으면 <b>허용</b>.</p>
         ${old && old.sites && old.sites.length ? `<div class="banner info small">이 PC에 예전 자료가 있습니다. 빈 폴더를 고르면 그리로 옮깁니다.</div>` : ''}`
-      : `<div class="banner warn">이 브라우저는 폴더 저장을 지원하지 않습니다. <b>크롬</b> 또는 <b>엣지</b>로 "유성 현장 관리 프로그램.html"을 열어 주세요.</div>`}
-    </div>
-    <div class="panel" style="max-width:760px;margin:0 auto 30px"><div class="row"><div class="grow"><h3 style="margin:0">예산안만 작성</h3>
-      <p class="muted small" style="margin:4px 0 0">데이터 폴더 없이 예산심의(案)만 쓰고 <b>파일(.xlsx)로 저장</b> → 실무자가 받아서 예산 탭에서 가져옵니다.</p></div>
-      <button class="btn" data-act="bgSolo">📝 예산안 작성</button></div></div>`;
+      : `<div class="banner warn">이 브라우저는 폴더 저장을 지원하지 않습니다. <b>크롬</b> 또는 <b>엣지</b>로 "유성 현장 관리 프로그램.html"을 열어 주세요.</div>`}`;
 }
 function conflictBanner() {
   if (!FS.conflict.length) return '';
@@ -85,18 +93,16 @@ function conflictBanner() {
       <button class="btn sm danger" data-act="fsForce">내 내용으로 덮어쓰기</button></div>`;
 }
 function renderTop() {
-  document.querySelectorAll('#tabs button[data-tab]').forEach(b => {   // 경리 모드에서 잠긴 탭: 숨기지 않고 🔒 표시 (누르면 관리자 비밀번호 창 — 18 #tabs click)
-    const h = hiddenTab(b.dataset.tab), lk = b.querySelector('.tab-lock');
-    if (h && !lk) b.insertAdjacentHTML('beforeend', ' <span class="tab-lock">🔒</span>'); else if (!h && lk) lk.remove();
-    b.style.opacity = h ? '.55' : ''; b.title = h ? '관리자 잠금 — 누르면 비밀번호를 넣고 열 수 있습니다' : '';
-  });
+  // 역할별 메뉴 (11/27): 경리 모드에서 잠긴 메뉴는 숨기고, 다 숨은 묶음은 묶음째 숨김 → 맨 아래 [🔒 관리자 메뉴 열기] 하나 (18 #navAdmin)
+  let nLock = 0;
+  document.querySelectorAll('#tabs button[data-tab]').forEach(b => { const h = hiddenTab(b.dataset.tab); b.hidden = h; if (h) nLock++; });
+  document.querySelectorAll('#tabs .nav-group').forEach(g => { const bs = [...g.querySelectorAll('button[data-tab]')]; g.hidden = bs.length > 0 && bs.every(b => b.hidden); });
+  const na = $('#navAdmin'); if (na) { na.hidden = !nLock; na.title = nLock ? `관리자 비밀번호를 넣으면 숨긴 메뉴 ${nLock}개(예산·현장 손익 등)가 보입니다` : ''; }
   let sb = $('#secBtn');
   if (!sb) { sb = document.createElement('button'); sb.id = 'secBtn'; sb.className = 'btn sm secbtn'; const st = $('#saveState'); st.parentNode.insertBefore(sb, st.nextSibling); sb.onclick = () => (SEC.keys[db.cur] ? secLock() : secUnlockDialog()); }
   sb.style.display = secOn() ? '' : 'none';
   sb.textContent = SEC.keys[db.cur] ? '🔓 관리자' : '🔒 경리 모드';
   sb.title = SEC.keys[db.cur] ? '누르면 잠급니다 (푼 현장 모두 경리 모드로)' : '이 현장 관리자 비밀번호로 잠금 해제';
-  const settingsBtn = $('#settingsTopBtn');
-  if (settingsBtn) { settingsBtn.hidden = false; settingsBtn.classList.toggle('active', state.tab === 'settings'); }
   $('#siteSelect').innerHTML = db.sites.map(s => `<option value="${s.id}" ${s.id === db.cur ? 'selected' : ''}>${esc(s.name)}</option>`).join('');
   $('#monthInput').value = state.ym;
 }
@@ -113,7 +119,7 @@ const ISSUE = {
   norc: { label: '영수증 없음', f: t => !(t.receipts || []).length },
   rcbad: { label: '영수증 확인 필요', f: t => Object.values(t.rcCheck || {}).some(Boolean), title: '어둡거나 흐려서 인쇄하면 안 보일 수 있는 사진' },
   memo: { label: '사용내역 확인', f: t => memoWarns(t).length > 0, title: '인원수 대신 이름 · 소모품 사유 · 주문 수량≠인원 · 편의점 품목 없는 영수증' },
-  over: { label: '식대 초과 사유', f: t => { const m = mealInfo(t); return !!(m && m.over && !String(t.overReason || '').trim()); }, title: '1인 식대 단가(출근부 → ⚙ 설정)를 넘은 식대 — 초과 사유 필요' },
+  over: { label: '식대 초과 사유', f: t => { const m = mealInfo(t); return !!(m && m.over && !String(t.overReason || '').trim()); }, title: '1인 식대 단가(출근·식대 → ⚙ 단가 설정)를 넘은 식대 — 초과 사유 필요' },
   cater: { label: '캐터링 중복', f: t => caterDup(t) && !t.caterOk, title: '캐터링 중식을 주문한 날 법카·전도금으로 먹은 중식' },
   photo: { label: '입고사진 없음', f: t => needPhoto(t) && !(t.photos || []).length, title: '소모품·비품 입고 사진' },
   u200: { label: '20만원↑ 사용내역서', f: t => isU200(t) && !u200Done(t), title: '20만원 이상 법인카드 사용내역서 (사용목적·참석자)' },
@@ -256,7 +262,7 @@ function viewHome() {
   const preTask = '';   // 직원 선지급 정산 대기 — 지금은 쓰지 않아 뺌
   // 현장 철수 체크리스트 (철수 진행 중일 때)
   const cl = s.closing ? closeItems(s) : null, clDone = cl ? cl.filter(x => x.done).length : 0;
-  const closeTask = cl ? `<div class="task"><span class="dday ${clDone === cl.length ? 'done' : 'soon'}">철수</span><div class="grow"><b>현장 철수 체크리스트 ${clDone}/${cl.length}</b> <span class="muted small">· 남은 일: ${esc(cl.filter(x => !x.done).slice(0, 6).map(x => x.label).join(', '))}${cl.length - clDone > 6 ? ' …' : ''}</span></div><button class="btn sm" data-act="goto" data-tab="settings" data-sub="close">바로가기 →</button></div>` : '';
+  const closeTask = cl ? `<div class="task"><span class="dday ${clDone === cl.length ? 'done' : 'soon'}">철수</span><div class="grow"><b>현장 철수 체크리스트 ${clDone}/${cl.length}</b> <span class="muted small">· 남은 일: ${esc(cl.filter(x => !x.done).slice(0, 6).map(x => x.label).join(', '))}${cl.length - clDone > 6 ? ' …' : ''}</span></div><button class="btn sm" data-act="goto" data-tab="close">바로가기 →</button></div>` : '';
   return `
     <section class="home-hero"><div><span class="eyebrow">현장 업무 현황</span><h1>${esc(s.name)} 업무 홈</h1><p>오늘 할 일과 마감 일정</p></div></section>
     ${setupPanel}

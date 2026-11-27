@@ -38,7 +38,7 @@ function viewCard() {
       <td style="min-width:260px"><textarea class="memo2" rows="1" data-ch="tx" data-id="${t.id}" data-f="memo" data-memo="1" data-fid="o${t.id}" placeholder="예) 중식/홍길동,김철수">${esc(t.memo)}</textarea>${txNote(t)}</td>
       ${claimOn() ? `<td class="center nowrap"><input type="checkbox" ${t.claim ? 'checked' : ''} data-ch="tx" data-id="${t.id}" data-f="claim" title="시행사 청구 가능">${t.claim ? `<input class="num" style="width:78px;margin-left:3px" value="${String(t.claimAmt ?? '').trim() !== '' ? fmt(t.claimAmt) : ''}" placeholder="${fmt(t.amount)}" data-ch="tx" data-id="${t.id}" data-f="claimAmt" data-fid="ca${t.id}" title="청구 금액 (비우면 전액) — 일부만 청구하면 나머지는 미청구"><label class="small muted" style="margin-left:3px" title="면세 — 부가세 0 (엑셀 공급가·부가세 칸)"><input type="checkbox" ${t.noVat ? 'checked' : ''} data-ch="tx" data-id="${t.id}" data-f="noVat">면세</label>` : ''}</td>` : ''}
       ${rcCell(t)}
-      <td class="center nowrap"><input type="checkbox" ${sel.has(t.id) ? 'checked' : ''} data-ch="cardSel" data-id="${t.id}" title="삭제할 내역 선택"></td></tr>`).join('');
+      <td class="center nowrap"><input type="checkbox" ${sel.has(t.id) ? 'checked' : ''} data-ch="cardSel" data-id="${t.id}" title="삭제할 내역 선택">${ROW_MORE}</td></tr>`).join('');
   const selN = list.filter(t => sel.has(t.id)).length, selAll = list.length && selN === list.length;
 
   // 집계

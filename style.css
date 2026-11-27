@@ -32,7 +32,7 @@ a{color:var(--accent)}
 .center{text-align:center}
 .hint{font-size:12px;color:var(--muted);margin:8px 2px 14px}
 /* [설명 글 숨기기] (18 hintTopBtn): 사용법 글만 숨김 — 버튼·링크가 든 안내줄(할 일·바로가기)·경고는 그대로 */
-body.nohint .hint, body.nohint .phd-guide, body.nohint .qb-h, body.nohint .banner.info:not(:has(button, a, input, select)){display:none}
+body.nohint :is(.hint, .phd-guide, .qb-h, .banner.info:not(:has(button, a, input, select))):not(.help-sec *){display:none}   /* 사용설명서 안 그림은 그대로 */
 
 /* ---------- 화면 틀: 위 막대 · 왼쪽 메뉴 · 본문 ---------- */
 .topbar{position:sticky;top:0;z-index:25;display:flex;align-items:center;gap:16px;height:var(--top);padding:0 20px 0 0;background:#fff;border-bottom:1px solid var(--line)}
@@ -55,6 +55,18 @@ body.nohint .hint, body.nohint .phd-guide, body.nohint .qb-h, body.nohint .banne
 .nav-copy b{font-size:14px;font-weight:500}
 .tabs .nav-item.active .nav-copy b{font-weight:700}
 .tabs .nav-bottom{margin-top:auto}
+.nav-label{padding:4px 12px 2px;font-size:11.5px;font-weight:600;color:var(--muted);letter-spacing:.02em;user-select:none}
+.nav-role{font-weight:500;font-size:10.5px;padding:0 5px;border:1px solid var(--line);border-radius:8px;margin-left:2px}
+.tabs .nav-item[hidden]{display:none}
+.tabs .nav-admin{color:var(--muted)}
+.phd-help{display:inline-flex;gap:4px;margin-left:10px;vertical-align:middle}
+.phd-help .ib{font-size:12px;font-weight:500;padding:2px 8px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--muted);cursor:pointer}
+.phd-help .ib:hover{color:var(--accent);border-color:var(--accent)}
+.setnav .set-sc{font-size:10.5px;font-weight:500;opacity:.7;margin-left:2px}
+.row-more{margin-left:4px;padding:0 6px;border:0;border-radius:4px;background:none;color:var(--muted);font-size:15px;line-height:20px;cursor:pointer}
+.row-more:hover{background:var(--hover);color:var(--ink)}
+.danger-zone{border-color:var(--bad)}
+.danger-zone h3{color:var(--bad)}
 /* 사용설명서 (10b_help.js) */
 .help{max-width:920px}
 .help-toc-l{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
@@ -955,6 +967,7 @@ details.files>summary{cursor:pointer}
   .nav-group+.nav-group{border-top:0;border-left:1px solid var(--line);padding:0 0 0 4px}
   .tabs .nav-item{width:auto;flex:0 0 auto;height:34px}
   .tabs .nav-bottom{margin-top:0}
+  .nav-label{display:none}
   .quickbar{top:47px}   /* 상단바는 고정 안 됨 → 메뉴 줄(34px + 위아래 여백) 바로 아래 */
   main{margin-left:0;padding:16px 14px 48px}
   .phd-t{flex:1 1 100%}

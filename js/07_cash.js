@@ -39,7 +39,7 @@ function viewCash() {
       <td class="num" style="min-width:84px"><input class="num${t.kind === 'in' ? ' cash-in' : ''}" value="${fmt(t.amount)}" data-ch="tx" data-id="${t.id}" data-f="amount" data-fid="a${t.id}" title="${t.kind === 'in' ? '입금' : '사용'} 금액"></td>
       <td class="num">${fmt(bal)}</td>
       ${t.kind === 'in' ? '<td></td>' : rcCell(t)}
-      <td class="center nowrap"><input type="checkbox" ${sel.has(t.id) ? 'checked' : ''} data-ch="cardSel" data-id="${t.id}" title="삭제할 내역 선택"></td></tr>`;
+      <td class="center nowrap"><input type="checkbox" ${sel.has(t.id) ? 'checked' : ''} data-ch="cardSel" data-id="${t.id}" title="삭제할 내역 선택">${ROW_MORE}</td></tr>`;
   }).join('');
   const selN = list.filter(t => sel.has(t.id)).length, selAll = list.length && selN === list.length;
 

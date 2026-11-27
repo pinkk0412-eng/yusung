@@ -4,11 +4,19 @@
 
 
 /* ================= 설정 ================= */
-const SET_SECS = [['site', '현장 정보·결재'], ['staff', '직원·카드'], ['rule', '정산 기한'], ['ai', '영수증 AI'], ['mb', '휴대폰 앱'], ['sec', '관리자 잠금'], ['close', '현장 철수'], ['data', '현장·데이터 관리']];
+/* 11/27 설정을 메뉴 둘로: [현장 설정](settings) = 이 현장에만 / [프로그램 설정](appset) = 모든 현장·이 PC · 현장 철수는 따로 메뉴(close)
+   [키, 탭 이름, 적용 범위 꼬리표] — 05 render 가 setSub 에 맞춰 탭을 바꿈 */
+const SET_SECS = [['site', '현장 정보·결재', '이 현장'], ['staff', '직원·카드', '이 현장'], ['sec', '관리자 잠금', '이 현장'], ['rule', '정산 기한·원천세', '모든 현장'], ['ai', '영수증 AI', '이 PC'], ['mb', '휴대폰 앱', '이 PC'], ['data', '현장·데이터 관리', '모든 현장']];
+const SET_APP = ['rule', 'ai', 'mb', 'data'];
 function viewSettings() {
-  const parts = settingsHtml().split(/<!--S:(\w+)-->/), cur = state.setSub || 'site', by = {};
+  const app = state.tab === 'appset', secs = SET_SECS.filter(x => SET_APP.includes(x[0]) === app);
+  const parts = settingsHtml().split(/<!--S:(\w+)-->/), by = {};
+  const cur = secs.some(x => x[0] === state.setSub) ? state.setSub : secs[0][0];
   for (let i = 1; i < parts.length; i += 2) by[parts[i]] = (by[parts[i]] || '') + parts[i + 1];
-  return `${pageHead('설정', esc(site().name) + '현장')}<div class="subtabs setnav">${SET_SECS.map(([k, l]) => `<button class="${k === cur ? 'active' : ''}" data-act="setSub" data-v="${k}">${l}${k === 'sec' && secOn() ? (isAdmin() ? ' 🔓' : ' 🔒') : ''}</button>`).join('')}</div>${by[cur] || ''}`;
+  return `${pageHead(app ? '프로그램 설정' : `현장 설정 — ${esc(site().name)}현장`, app ? '모든 현장에 같이 쓰는 값 · 이 PC에만 저장되는 값' : '이 현장에만 적용되는 값')}<div class="subtabs setnav">${secs.map(([k, l, sc]) => `<button class="${k === cur ? 'active' : ''}" data-act="setSub" data-v="${k}">${l}${k === 'sec' && secOn() ? (isAdmin() ? ' 🔓' : ' 🔒') : ''} <span class="set-sc">${sc}</span></button>`).join('')}</div>${by[cur] || ''}`;
+}
+function viewClose() {   // 현장 철수 체크리스트 (13 closePanel) — 설정이 아니라 업무 목록이라 메뉴로
+  return `${pageHead(`현장 철수 — ${esc(site().name)}현장`, '카드 폐기·반납, 전도금 통장·도장, 보증금 회수, 해지, 집기 반납 …')}${closePanel(site())}`;
 }
 function settingsHtml() {
   const s = site(), st = db.settings;
@@ -97,12 +105,11 @@ function settingsHtml() {
         <span class="small ${aiCfg.key ? '' : 'muted'}">${aiCfg.key ? '✔ AI 인식 사용 중 (영수증 사진이 Anthropic으로 전송됩니다)' : '키가 없으면 오프라인 글자 인식을 사용합니다'}</span></div>
       <p class="muted small">키 발급: console.anthropic.com → API Keys (유료) · 오류가 나면 오프라인 인식으로 자동 전환</p></div>
 
-<!--S:mb-->${mbPanel()}<!--S:sec-->${secPanel()}<!--S:close-->${closePanel(s)}<!--S:data-->
+<!--S:mb-->${mbPanel()}<!--S:sec-->${secPanel()}<!--S:data-->
     <div class="panel"><h3 style="margin-top:0">현장 관리</h3>
       <div class="row"><button class="btn primary" data-act="siteAdd">+ 새 현장 추가</button>
         <button class="btn" data-act="siteCopy">현재 현장 설정 복사해서 새 현장</button>
-        <button class="btn" data-act="siteRelink">현장 폴더 ${s.folder ? '바꾸기' : '연결'}</button>
-        <button class="btn danger" data-act="siteDel">현재 현장 삭제</button></div>
+        <button class="btn" data-act="siteRelink">현장 폴더 ${s.folder ? '바꾸기' : '연결'}</button></div>
       ${db.sites.length > 1 ? `<div class="row small" style="margin-top:10px">다른 현장을 <b>${esc(site().name)}</b>(으)로 합치기:
         <select id="mergeFrom">${db.sites.filter(x => x.id !== db.cur).map(x => `<option value="${x.id}">${esc(x.name)} (${db.tx.filter(t => t.siteId === x.id).length}건)</option>`).join('')}</select>
         <button class="btn sm" data-act="siteMerge">합치기</button><span class="muted">내역·카드·직원·거래처·영수증을 옮기고 그 현장은 없어집니다</span></div>` : ''}
@@ -131,5 +138,7 @@ function settingsHtml() {
           <button class="btn sm" data-act="exportSite">현재 현장만 내보내기</button>
           <button class="btn sm" data-act="importSite">현장 자료 가져오기(합치기)</button>
         </div></details>
-    </div>`;
+    </div>
+    <div class="panel danger-zone"><h3 style="margin-top:0">위험 작업</h3>
+      <div class="row"><button class="btn danger" data-act="siteDel">현재 현장 삭제</button><span class="small muted">${esc(s.name)}현장의 내역·직원·카드가 프로그램에서 없어집니다 (폴더의 영수증·서류 파일은 남음)</span></div></div>`;
 }

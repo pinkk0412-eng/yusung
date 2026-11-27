@@ -3,7 +3,7 @@
 'use strict';
 
 /* 화면 이름 → 그리는 함수 (모든 파일이 읽힌 뒤라야 하므로 여기 둠) */
-const VIEWS = { home: viewHome, card: viewCard, cash: viewCash, meal: viewMeal, cater: viewCater, pay: viewPay, monthly: viewMonthly, pl: viewPl, bill: viewBill, asset: viewAsset, pumui: viewPumui, budget: viewBudget, settings: viewSettings, help: viewHelp };
+const VIEWS = { home: viewHome, card: viewCard, cash: viewCash, meal: viewMeal, pay: viewPay, monthly: viewMonthly, pl: viewPlTab, bill: viewBill, asset: viewAsset, pumui: viewPumui, budget: viewBudget, settings: viewSettings, appset: viewSettings, close: viewClose, help: viewHelp };
 
 /* ================= 이벤트: 입력 변경 ================= */
 const CH = {
@@ -58,7 +58,7 @@ const CH = {
   bgMeta: el => bgCh('meta', el), bgSup: el => bgCh('sup', el), bgPh: el => bgCh('ph', el), bgItem: el => bgCh('item', el),   // 14c 예산
   mrow: el => { const m = monthOf(db.cur, el.dataset.ym || state.ym); const r = m.rows[el.dataset.id] = m.rows[el.dataset.id] || {}; r[el.dataset.f] = ['period', 'qty', 'endDate', 'diffReason', 'ckNote'].includes(el.dataset.f) ? el.value.trim() : toNum(el.value); if (el.dataset.f === 'ckNote') { delete r.qty; delete r.diffReason; } if (/^(ys|sh)$/.test(el.dataset.f)) { delete r.caterAuto; r.caterManual = true; } if (el.dataset.f === 'period') delete r.caterManual; },   // 사용기간을 고치면 캐터링 금액은 그 기간으로 다시 자동 (09 caterAutoApply)   // 비고 = 예전 대수·인원 + 변동 사유를 합친 칸 · data-ym = 업체별 월 지출 표(여러 달)
   mck: el => { const m = monthOf(db.cur, state.ym), v = db.vendors.find(x => x.id === el.dataset.id); if (!v) return; const r = m.rows[v.id] = m.rows[v.id] || {}; r.ck = r.ck || {}; r.ck[el.dataset.k] = el.value; v.ckDef = v.ckDef || {}; v.ckDef[el.dataset.k] = el.value === 'na' ? 'na' : 'need'; },
-  site: el => { const s = site(); s[el.dataset.f] = el.type === 'checkbox' ? el.checked : el.dataset.num ? toNum(el.value) : el.value; },
+  site: el => { const s = site(); s[el.dataset.f] = el.type === 'checkbox' ? el.checked : el.dataset.num ? toNum(el.value) : el.dataset.f === 'name' ? siteShort(el.value) : el.value; },   // 약칭 끝 "현장" 은 뺌 (01 siteShort)
   feeDoc: el => { const s = site(); s.feeDoc = s.feeDoc || {}; s.feeDoc[el.dataset.f] = el.value; },   // 설정 › 분양대행수수료 청구공문 (12d)
   taxSet: el => { const t = db.settings.tax = db.settings.tax || {}; t[el.dataset.f] = el.type === 'checkbox' ? el.checked : el.value.trim() === '' ? '' : toNum(el.value); },   // 설정 › 원천세 (00 taxOpt)
   appr: el => { site().approvers[+el.dataset.i][el.dataset.f] = el.dataset.f === 'name' ? el.value.trim().replace(/\s*\/\s*/g, '/') : el.value; },   // "상무 / 홍길동" → "상무/홍길동" (결재본처럼 붙여 써야 칸에 다 들어감)
@@ -137,8 +137,7 @@ async function init() {
   if (hp.get('sub')) { if (hp.get('tab') === 'settings') state.setSub = hp.get('sub'); else state.mealSub = hp.get('sub'); }
   if (hp.get('grp')) state.mealGroup = hp.get('grp');
   if (hp.get('set')) state.setSub = hp.get('set');
-  if (state.tab === 'meal' && (state.mealGroup === 'cater' || state.mealSub === 'cater')) { state.tab = 'cater'; state.caterSub = 'cater'; state.mealGroup = '현장'; state.mealSub = 'att'; }   // 예전 식대·출근부 안 캐터링 화면 → 식대·캐터링 탭
-  if (state.tab === 'meal' && state.mealSub === 'meal') { state.tab = 'cater'; state.caterSub = 'meal'; state.mealSub = 'att'; }   // 예전 식대내역 화면 → 식대·캐터링 탭
+  if (state.mealGroup === 'cater') { state.mealGroup = '현장'; state.mealSub = 'cater'; }   // 예전 출근부 안 캐터링 칸 → 출근·식대 › 캐터링 (예전 'cater' 탭은 05 render 가 바꿈)
   // 새로고침 뒤 "이어서 열기" 화면: 아무 곳이나 누르거나 키를 누르면 전에 연 폴더 권한을 다시 받음 (브라우저 규칙상 사용자가 한 번은 눌러야 함)
   let reopening = false;
   const gateReopen = ev => {
@@ -230,13 +229,11 @@ async function init() {
       ev.preventDefault();
     }
   });
-  $('#tabs').addEventListener('click', ev => { const b = ev.target.closest('button'); if (!b) return; if (hiddenTab(b.dataset.tab)) { secUnlockDialog(b.dataset.tab); return; } dropBlankTx(); state.tab = b.dataset.tab; state.lockedTab = ''; render(); window.scrollTo(0, 0); });
-  // 설명 글 숨기기 — 익숙해지면 사용법 글을 꺼서 화면을 짧게 (이 PC 브라우저에만 기억, 13 인쇄와 무관)
-  const hintSet = on => { document.body.classList.toggle('nohint', on); $('#hintTopBtn').textContent = on ? '설명 글 보이기' : '설명 글 숨기기'; try { localStorage.setItem('ys-nohint', on ? '1' : ''); } catch (e) { } };
-  let hintOff = false; try { hintOff = localStorage.getItem('ys-nohint') === '1'; } catch (e) { }
-  hintSet(hintOff);
-  $('#hintTopBtn').addEventListener('click', () => { hintSet(!document.body.classList.contains('nohint')); stickyHeads(); });
-  $('#settingsTopBtn').addEventListener('click', () => { state.tab = 'settings'; render(); window.scrollTo(0, 0); });
+  $('#tabs').addEventListener('click', ev => { const b = ev.target.closest('button[data-tab]'); if (!b) return; if (hiddenTab(b.dataset.tab)) { secUnlockDialog(b.dataset.tab); return; } dropBlankTx(); state.tab = b.dataset.tab; state.lockedTab = ''; if ((state.tab === 'settings') === SET_APP.includes(state.setSub)) state.setSub = '';   /* 메뉴로 누르면 그 설정의 첫 탭 (05 render 가 setSub 로 현장/프로그램 설정을 맞추므로) */ render(); window.scrollTo(0, 0); });
+  // 사용법 안내 글: 기본은 접어 둠, 제목 옆 [사용법] 으로 펴기 (04 pageHelpBtns · 이 PC 브라우저에만 기억 'ys-hint' = '1' 펼침)
+  let hintOn = false; try { hintOn = localStorage.getItem('ys-hint') === '1'; } catch (e) { }
+  document.body.classList.toggle('nohint', !hintOn);
+  $('#navAdmin').addEventListener('click', () => secUnlockDialog());   // 경리 모드: 숨긴 관리자 메뉴 열기 (05 renderTop)
   $('#siteSelect').addEventListener('change', ev => { db.cur = ev.target.value; save(); render(); });
   $('#monthInput').addEventListener('change', ev => { if (ev.target.value) { state.ym = ev.target.value; render(); } });
   const verEl = $('#appVer'); if (verEl) verEl.textContent = 'v' + APP_VERSION;

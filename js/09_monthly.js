@@ -74,7 +74,7 @@ function monthlyCheckText(ym) {
   const e = vs.filter(v => (m.rows[v.id] || {}).endDate); if (e.length) lines.push(`반납·해지(예정) : ${e.map(v => `${v.name} ${m.rows[v.id].endDate}`).join(', ')}`);
   return `<${monthNo(ym)}월 경비 증빙 점검> ${site().name}\n` + (lines.length ? lines.map((l, i) => `${i + 1}. ${l}`).join('\n') : '누락 없음');
 }
-/* 캐터링 → 월결제: 지난달 캐터링(캐터링 탭 08 viewCater, 업체별 08 caterByVendor)을 이번 달 거래처에 업체 이름으로 맞춰 넣음
+/* 캐터링 → 월결제: 지난달 캐터링(출근·식대 › 캐터링 08 mealCater, 업체별 08 caterByVendor)을 이번 달 거래처에 업체 이름으로 맞춰 넣음
    체크 없이 이름만으로 맞춤 · 이름 없는 캐터링 = 현장 기본 업체 이름 → 그래도 없으면 이름·과목·내역에 "캐터링"이 든 거래처 · 이름이 있는데 맞는 거래처가 없으면 missing (월결제 화면에 [거래처로 추가]) */
 // 거래처의 캐터링 기간 = 사용기간 칸(직접 적은 값 또는 전월에서 넘어온 값)을 읽을 수 있으면 그 기간, 아니면 지난달 1일~말일
 function caterRangeOf(ym, v) {
@@ -138,7 +138,7 @@ function viewMonthlyYear() {
     ${monthlyViewBtns('year')}
     <div class="banner info small">칸에 금액을 바로 넣으면 그 달 월결제에 저장됩니다 (유성 부담). 노란 칸 = 전월과 금액이 다름 · 달 이름을 누르면 그 달 월결제로 · 마감된 달은 고칠 수 없음</div>
     <div class="tbl-wrap" data-scroll-end><table class="t my-tbl"><thead><tr><th class="my-v">업체</th>${head}<th>합계</th><th>월평균</th></tr></thead>
-    <tbody>${body || `<tr><td colspan="${months.length + 3}" class="center muted" style="padding:30px">거래처가 없습니다. [월별 입력]에서 "+ 거래처"로 등록하세요.</td></tr>`}
+    <tbody>${body || `<tr><td colspan="${months.length + 3}" class="center muted" style="padding:30px">거래처가 없습니다. [월별 입력]에서 [+ 거래처]로 등록하세요.</td></tr>`}
     <tr class="sum"><td class="my-v">합계</td>${mt.map(t => `<td class="num">${fmt0(t.total)}</td>`).join('')}<td class="num">${fmt0(sum(mt, t => t.total))}</td><td></td></tr></tbody></table></div>`;
 }
 function viewMonthly() {
@@ -181,9 +181,9 @@ function viewMonthly() {
   return `
     <datalist id="subjList">${MONTHLY_SUBJECTS.map(s => `<option>${s}</option>`).join('')}</datalist>
     ${pageHead(`${ymLabel(ym)} 월결제 ${pmBadge('monthly', ym)}`, `마감 ${db.settings.monthlyClose}일 · 자금집행 ${mdw(payDate)}${payDate.getDate() !== db.settings.monthlyPay ? ` (${db.settings.monthlyPay}일이 휴일 → 다음 영업일)` : ''}`,
-    BTN('toggleClose', m.closed ? '마감 해제' : '마감하기', '', m.closed ? '' : 'primary') + BTN('copyPrevMonthly', '전월 금액 복사', dis)
+    BTN('toggleClose', m.closed ? '마감 해제' : '마감하기', '', m.closed ? '' : 'primary') + BTN('vendorAdd', '+ 거래처', `${dis} title="새 월결제 거래처 (임차·통신·생수·캐터링 등)"`) + BTN('copyPrevMonthly', '전월 금액 복사', dis)
     + BTN('printMonthly', '자금청구서·지출결의서 인쇄') + BTN('exportMonthly', '엑셀로 저장', 'title="자금청구서 · 지출결의서 · 결제내역서 · 증빙 체크 시트"')
-    + MORE([MI('vendorAdd', '+ 거래처', dis, '새 월결제 거래처 (임차·통신·생수·캐터링 등)'), ...(t.sh ? [] : [MI('monthlyShToggle', showSh ? '시행사 칸 숨기기' : '+ 시행사 칸', '', '시행사 청구가 있을 때 시행사 부담 금액을 넣는 칸')])]))}
+    + (t.sh ? '' : MORE([MI('monthlyShToggle', showSh ? '시행사 칸 숨기기' : '+ 시행사 칸', '', '시행사 청구가 있을 때 시행사 부담 금액을 넣는 칸')])))}
     ${monthlyViewBtns('month')}
     ${m.closed ? `<div class="banner ok">마감 완료 — ${mdw(payDate)} 정산 예정. 수정하려면 "마감 해제"를 누르세요.</div>`
       : `<div class="banner ${dd <= 3 ? 'warn' : 'info'}">마감까지 <b>${dd >= 0 ? `D-${dd}` : '기한 지남 · 아직 마감 안 됨'}</b> — 거래처별 청구 금액(VAT 포함)을 입력하고 마감하세요.</div>`}
@@ -196,7 +196,7 @@ function viewMonthly() {
     </div>
     ${bgIss.length ? `<div class="banner warn small">예산 확인 — <b>품의가 필요한 거래처 ${bgIss.length}곳</b>: ${bgIss.map(x => `${esc(x.v.name || '(이름 없음)')} (${esc(x.w.t)})`).join(' · ')} <button class="btn sm" data-act="goto" data-tab="budget">예산 탭</button></div>` : ''}
     <div class="tbl-wrap"><table class="t tight"><thead><tr><th>#</th><th>과목</th><th>업체명</th><th>거래내역</th><th>유성</th>${showSh ? '<th>시행사</th>' : ''}<th>합계</th><th>전월</th><th>사용기간/비고</th><th>참조문서</th>${bgOn ? '<th title="예산 항목 (품의로 지급하는 거래처는 비워 두고 참조문서에 품의 번호) · 예산 안에서 고른 업체는 구두보고 날짜">예산</th>' : ''}<th title="부가세 포함 여부 (손익 계산용)">VAT</th><th title="캐터링 연동">캐터링</th><th></th></tr></thead>
-    <tbody>${rows || `<tr><td colspan="${(showSh ? 13 : 12) + (bgOn ? 1 : 0)}" class="center muted" style="padding:30px">거래처가 없습니다. [+ 거래처]로 임차료·통신비·생수·캐터링 등 매월 결제처를 등록하세요.</td></tr>`}
+    <tbody>${rows || `<tr><td colspan="${(showSh ? 13 : 12) + (bgOn ? 1 : 0)}" class="center muted" style="padding:30px">거래처가 없습니다. 임차료·통신비·생수·캐터링 등 매월 결제처를 등록하세요.<div style="margin-top:10px">${BTN('vendorAdd', '+ 거래처', dis, 'primary')}</div></td></tr>`}
     <tr class="sum"><td colspan="4">합계</td><td class="num">${fmt(t.ys)}</td>${showSh ? `<td class="num">${fmt(t.sh)}</td>` : ''}<td class="num">${fmt(t.total)}</td><td class="num muted">${fmt(pt.total)}</td><td colspan="${bgOn ? 6 : 5}"></td></tr></tbody></table></div>
     ${monthlyCheck(ym)}`;
 }

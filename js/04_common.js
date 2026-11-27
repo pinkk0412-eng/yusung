@@ -246,7 +246,14 @@ const TAB_GUIDE = {
   asset: '구입·임차·소모품 등록 → 상태 관리 → 철수 때 회수 리스트',
   settings: '현장 정보 → 직원·카드 → 정산 기한',
 };
-const pageHead = (title, sub, actions) => `<div class="phd"><div class="phd-t"><h2>${title}</h2>${sub ? `<div class="phd-sub">${sub}</div>` : ''}${TAB_GUIDE[state.tab] ? `<div class="phd-guide">${TAB_GUIDE[state.tab]}</div>` : ''}</div><div class="phd-a">${actions || ''}</div></div>`;
+/* 제목 옆 [? 설명서] = 사용설명서의 그 화면 절로 (17 ACT.helpOpen) · [사용법] = 화면마다 붙은 조작 안내 글을 펴고 접기 (모든 화면 같이 · 이 PC에 기억, 18 hintSet)
+   11/27 검토: 안내 글이 화면마다 2~4줄씩 있어 빽빽함 → 기본은 접어 둠 */
+const HELP_OF = { pl: 'budget', appset: 'settings', close: 'settings' };
+const helpSecOf = () => state.tab === 'meal' && (state.mealSub === 'meal' || state.mealSub === 'cater') ? 'cater' : HELP_OF[state.tab] || state.tab;
+const pageHelpBtns = () => `<span class="phd-help">${typeof HELP_SECS !== 'undefined' && HELP_SECS.some(x => x[0] === helpSecOf()) && state.tab !== 'help' ? `<button class="ib" data-act="helpOpen" data-v="${helpSecOf()}" title="사용설명서에서 이 화면 설명 보기">? 설명서</button>` : ''}${state.tab === 'help' ? '' : `<button class="ib phd-hint" data-act="hintToggle" title="이 화면의 사용법 안내 글 보이기·숨기기 (모든 화면 같이)">${document.body.classList.contains('nohint') ? '사용법 ▾' : '사용법 ▴'}</button>`}</span>`;
+const pageHead = (title, sub, actions) => `<div class="phd"><div class="phd-t"><h2>${title}${pageHelpBtns()}</h2>${sub ? `<div class="phd-sub">${sub}</div>` : ''}${TAB_GUIDE[state.tab] ? `<div class="phd-guide">${TAB_GUIDE[state.tab]}</div>` : ''}</div><div class="phd-a">${actions || ''}</div></div>`;
+// 줄 끝 [⋯] = 그 줄 오른쪽 클릭 메뉴와 같음 (오른쪽 클릭을 몰라도 찾게, 17 ACT.rowMenu)
+const ROW_MORE = '<button type="button" class="row-more" data-act="rowMenu" title="이 줄 메뉴 (삭제 등 — 줄에서 오른쪽 클릭과 같음)">⋯</button>';
 const BTN = (act, label, attrs = '', cls = '') => `<button class="btn ${cls}" data-act="${act}" ${attrs}>${label}</button>`;
 const MENU = (label, items) => `<details class="dd"><summary class="btn">${label} <span class="dd-car">▾</span></summary><div class="dd-m">${items.filter(Boolean).join('')}</div></details>`;
 // [⋯ 더보기]: 자주 안 쓰는 버튼을 모아 두는 메뉴 (윗줄 맨 끝) — 탭마다 매일·매달 쓰는 버튼만 밖에 남김 (11/25 "버튼이 많은데 실제로는 안 씀")
